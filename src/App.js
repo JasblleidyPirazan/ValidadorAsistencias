@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { Calendar, CheckCircle, AlertTriangle, Clock, X } from 'lucide-react';
 
 // Configuración de la API
-const API_BASE_URL = 'https://script.google.com/macros/s/AKfycbx3J8ZcVsVX7Ly5Ryp-WBVzLdarlwJkb8vzxoTHx6edqHw79QaMWCjUngL-y9rglqqN/exec';
+const API_BASE_URL = 'https://script.google.com/macros/s/AKfycbyEvxwyMHS8hYVTDnyCELlCxLu_gBNpQWb5wxdozXfXeSFb8SF7DyXPkWDBNbU5-eSw/exec';
 
 const API_CONFIG = {
   ASISTENCIAS_PF: `${API_BASE_URL}?sheet=asistencias`,
@@ -284,6 +284,7 @@ const App = () => {
       ID_Revision: `REV_${Date.now()}`,
       Fecha: modalData.fecha,
       Grupo_Codigo: modalData.grupo,
+      Profesor: modalData.profesor || 'Sin asignar',
       Estado_Revision: 'Aprobado',
       Notas: notas,
       Revisado_Por: 'Coordinador',
@@ -319,6 +320,7 @@ const App = () => {
       ID_Revision: `REV_${Date.now()}`,
       Fecha: modalData.fecha,
       Grupo_Codigo: modalData.grupo,
+      Profesor: modalData.profesor || 'Sin asignar',
       Estado_Revision: 'Pendiente',
       Notas: notas,
       Revisado_Por: 'Coordinador',
@@ -351,9 +353,9 @@ const App = () => {
   const clasesPorHorario = agruparPorHorario(clases, clasesKeys);
 
   // Obtener listas únicas para filtros
-  const profesores = [...new Set(maestroGrupos.map(g => g.Profesor))];
-  const grupos = [...new Set(maestroGrupos.map(g => g.Codigo))];
-  const canchas = [...new Set(maestroGrupos.map(g => g.Cancha))];
+  const profesores = [...new Set(maestroGrupos.map(g => g.Profesor).filter(Boolean))];
+  const grupos = [...new Set(maestroGrupos.map(g => g.Codigo).filter(Boolean))];
+  const canchas = [...new Set(maestroGrupos.map(g => g.Cancha).filter(Boolean))];
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -553,11 +555,12 @@ const App = () => {
                     <div key={rev.ID_Revision} className="border-b pb-3">
                       <div className="flex justify-between items-start">
                         <div>
-                          <p className="font-bold">{rev.Grupo_Codigo} - {rev.Fecha}</p>
-                          <p className={`text-sm ${rev.Estado_Revision === 'Aprobado' ? 'text-green-600' : 'text-yellow-600'}`}>
+                          <p className="font-bold text-lg">{rev.Grupo_Codigo} - {rev.Fecha}</p>
+                          <p className="text-sm text-gray-600 mb-1">Profesor: {rev.Profesor}</p>
+                          <p className={`text-sm font-medium ${rev.Estado_Revision === 'Aprobado' ? 'text-green-600' : 'text-yellow-600'}`}>
                             {rev.Estado_Revision}
                           </p>
-                          {rev.Notas && <p className="text-sm text-gray-600 mt-1">{rev.Notas}</p>}
+                          {rev.Notas && <p className="text-sm text-gray-600 mt-2 italic">"{rev.Notas}"</p>}
                         </div>
                         <span className="text-xs text-gray-400">{new Date(rev.Timestamp).toLocaleString()}</span>
                       </div>
