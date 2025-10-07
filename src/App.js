@@ -50,18 +50,43 @@ const App = () => {
       const dataMaestro = await resMaestro.json();
       const dataEstudiantes = await resEstudiantes.json();
 
+      console.log('Respuestas completas de API:', {
+        dataPF,
+        dataProfes,
+        dataMaestro,
+        dataEstudiantes
+      });
+
+      // Validar que las respuestas tengan la estructura correcta
+      if (!dataPF?.data || !dataProfes?.data || !dataMaestro?.data) {
+        console.error('Estructura de datos incorrecta:', {
+          dataPF: dataPF?.data ? 'OK' : 'ERROR',
+          dataProfes: dataProfes?.data ? 'OK' : 'ERROR',
+          dataMaestro: dataMaestro?.data ? 'OK' : 'ERROR',
+          dataEstudiantes: dataEstudiantes?.data ? 'OK' : 'ERROR'
+        });
+        throw new Error('Las respuestas de la API no tienen la estructura esperada. Verifica que el Apps Script esté desplegado correctamente.');
+      }
+
       console.log('Datos recibidos:', {
         asistenciasPF: dataPF.count,
         asistenciasProfes: dataProfes.count,
         maestroGrupos: dataMaestro.count,
-        estudiantes: dataEstudiantes.count
+        estudiantes: dataEstudiantes?.count || 0
       });
 
-      // Crear mapa de estudiantes ID -> Nombre
+      // Crear mapa de estudiantes ID -> Nombre (con validación)
       const estudiantesMap = {};
-      dataEstudiantes.data.forEach(est => {
-        estudiantesMap[est.ID] = est.Nombre;
-      });
+      if (dataEstudiantes?.data && Array.isArray(dataEstudiantes.data)) {
+        dataEstudiantes.data.forEach(est => {
+          if (est?.ID && est?.Nombre) {
+            estudiantesMap[est.ID] = est.Nombre;
+          }
+        });
+        console.log('Estudiantes cargados:', Object.keys(estudiantesMap).length);
+      } else {
+        console.warn('No se pudieron cargar los estudiantes. Se mostrarán los IDs.');
+      }
       setEstudiantes(estudiantesMap);
 
       // Filtrar por fecha seleccionada
@@ -80,7 +105,7 @@ const App = () => {
       
     } catch (error) {
       console.error('Error cargando datos:', error);
-      alert('Error al cargar datos. Por favor, revisa la consola para más detalles.');
+      alert(`Error al cargar datos: ${error.message}\n\nRevisa la consola del navegador (F12) para más detalles.`);
     }
     setLoading(false);
   }, [selectedDate]);
