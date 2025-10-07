@@ -216,9 +216,9 @@ const App = () => {
     };
 
     try {
-      const response = await fetch(API_CONFIG.REVISIONES, {
+      await fetch(API_CONFIG.REVISIONES, {
         method: 'POST',
-        mode: 'no-cors', // Necesario para Apps Script
+        mode: 'no-cors',
         headers: {
           'Content-Type': 'application/json',
         },
@@ -232,6 +232,41 @@ const App = () => {
       alert('Clase aprobada exitosamente ✅');
     } catch (error) {
       console.error('Error aprobando clase:', error);
+      alert('Error al guardar la revisión. Revisa la consola.');
+    }
+  };
+
+  // Dejar pendiente
+  const dejarPendiente = async () => {
+    if (!modalData) return;
+
+    const revision = {
+      ID_Revision: `REV_${Date.now()}`,
+      Fecha: modalData.fecha,
+      Grupo_Codigo: modalData.grupo,
+      Estado_Revision: 'Pendiente',
+      Notas: notas,
+      Revisado_Por: 'Coordinador',
+      Timestamp: new Date().toISOString()
+    };
+
+    try {
+      await fetch(API_CONFIG.REVISIONES, {
+        method: 'POST',
+        mode: 'no-cors',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(revision)
+      });
+
+      console.log('Revisión pendiente:', revision);
+      
+      setRevisiones([...revisiones, revision]);
+      setShowModal(false);
+      alert('Clase marcada como pendiente ⏸️');
+    } catch (error) {
+      console.error('Error marcando como pendiente:', error);
       alert('Error al guardar la revisión. Revisa la consola.');
     }
   };
