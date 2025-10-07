@@ -1,14 +1,14 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { Calendar, CheckCircle, AlertTriangle, Clock, Filter, X, Edit2, Save } from 'lucide-react';
+import { Calendar, CheckCircle, AlertTriangle, Clock, X } from 'lucide-react';
 
-// Configuración de la API
-const API_CONFIG = {
-  // Reemplaza estos URLs con tus endpoints de Google Apps Script
-  ASISTENCIAS_PF: 'TU_URL_API_ASISTENCIAS',
-  ASISTENCIAS_PROFES: 'TU_URL_API_ASISTENCIAS_PROFES',
-  REVISIONES: 'TU_URL_API_REVISIONES',
-  MAESTRO_GRUPOS: 'TU_URL_API_MAESTRO_GRUPOS'
-};
+// Configuración de la API (comentada para no causar error de ESLint)
+// Descomentar cuando conectes las APIs reales
+// const API_CONFIG = {
+//   ASISTENCIAS_PF: 'TU_URL_API_ASISTENCIAS',
+//   ASISTENCIAS_PROFES: 'TU_URL_API_ASISTENCIAS_PROFES',
+//   REVISIONES: 'TU_URL_API_REVISIONES',
+//   MAESTRO_GRUPOS: 'TU_URL_API_MAESTRO_GRUPOS'
+// };
 
 const App = () => {
   const [currentPage, setCurrentPage] = useState('pendientes');
