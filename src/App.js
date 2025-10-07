@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Calendar, CheckCircle, AlertTriangle, Clock, Filter, X, Edit2, Save } from 'lucide-react';
 
 // Configuración de la API
@@ -28,12 +28,8 @@ const App = () => {
   const [modalData, setModalData] = useState(null);
   const [notas, setNotas] = useState('');
 
-  // Cargar datos al inicio
-  useEffect(() => {
-    loadData();
-  }, [selectedDate]);
-
-  const loadData = async () => {
+  // Cargar datos al inicio - memoizado con useCallback
+  const loadData = useCallback(async () => {
     setLoading(true);
     try {
       // Simular carga de datos (reemplazar con fetch real)
@@ -62,7 +58,11 @@ const App = () => {
       console.error('Error cargando datos:', error);
     }
     setLoading(false);
-  };
+  }, [selectedDate]);
+
+  useEffect(() => {
+    loadData();
+  }, [loadData]);
 
   // Comparar asistencias y detectar inconsistencias
   const compararAsistencias = () => {
