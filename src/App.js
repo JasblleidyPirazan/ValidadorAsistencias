@@ -9,8 +9,7 @@ const API_CONFIG = {
   ASISTENCIAS_PROFES: `${API_BASE_URL}?sheet=asistencias_profes`,
   REVISIONES: API_BASE_URL,
   MAESTRO_GRUPOS: `${API_BASE_URL}?sheet=maestro_grupos`,
-  ESTUDIANTES: 'Estudiantes',  
-  REVISIONES: 'Revisiones'
+  ESTUDIANTES: `${API_BASE_URL}?sheet=estudiantes`
 };
 
 const App = () => {
@@ -19,6 +18,7 @@ const App = () => {
   const [asistenciasProfes, setAsistenciasProfes] = useState([]);
   const [revisiones, setRevisiones] = useState([]);
   const [maestroGrupos, setMaestroGrupos] = useState([]);
+  const [estudiantes, setEstudiantes] = useState({});
   const [loading, setLoading] = useState(true);
   const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
   const [filters, setFilters] = useState({
@@ -38,21 +38,31 @@ const App = () => {
       console.log('Cargando datos para fecha:', selectedDate);
       
       // Hacer peticiones en paralelo
-      const [resPF, resProfes, resMaestro] = await Promise.all([
+      const [resPF, resProfes, resMaestro, resEstudiantes] = await Promise.all([
         fetch(API_CONFIG.ASISTENCIAS_PF),
         fetch(API_CONFIG.ASISTENCIAS_PROFES),
-        fetch(API_CONFIG.MAESTRO_GRUPOS)
+        fetch(API_CONFIG.MAESTRO_GRUPOS),
+        fetch(API_CONFIG.ESTUDIANTES)
       ]);
 
       const dataPF = await resPF.json();
       const dataProfes = await resProfes.json();
       const dataMaestro = await resMaestro.json();
+      const dataEstudiantes = await resEstudiantes.json();
 
       console.log('Datos recibidos:', {
         asistenciasPF: dataPF.count,
         asistenciasProfes: dataProfes.count,
-        maestroGrupos: dataMaestro.count
+        maestroGrupos: dataMaestro.count,
+        estudiantes: dataEstudiantes.count
       });
+
+      // Crear mapa de estudiantes ID -> Nombre
+      const estudiantesMap = {};
+      dataEstudiantes.data.forEach(est => {
+        estudiantesMap[est.ID] = est.Nombre;
+      });
+      setEstudiantes(estudiantesMap);
 
       // Filtrar por fecha seleccionada
       const asistenciasFiltradas = dataPF.data.filter(a => a.Fecha === selectedDate);
@@ -98,6 +108,7 @@ const App = () => {
       if (!clases[key].estudiantes[estudianteKey]) {
         clases[key].estudiantes[estudianteKey] = {
           id: estudianteKey,
+          nombre: estudiantes[estudianteKey] || estudianteKey,
           pf: null,
           profe: null
         };
@@ -198,6 +209,27 @@ const App = () => {
     return { tipo: 'desconocido', color: 'gray', icono: '❓' };
   };
 
+  // Filtrar clases según filtros activos
+  const filtrarClases = (clases) => {
+    return Object.keys(clases).filter(key => {
+      const clase = clases[key];
+      
+      if (filters.profesor && clase.profesor !== filters.profesor) return false;
+      if (filters.grupo && clase.grupo !== filters.grupo) return false;
+      if (filters.cancha && clase.cancha !== filters.cancha) return false;
+      
+      if (filters.soloInconsistencias) {
+        const tieneInconsistencia = Object.values(clase.estudiantes).some(est => {
+          const inc = detectarInconsistencia(est);
+          return inc.tipo === 'conflicto' || inc.tipo === 'falta_pf' || inc.tipo === 'falta_profe';
+        });
+        if (!tieneInconsistencia) return false;
+      }
+
+      return true;
+    });
+  };
+
   // Agrupar clases por horario
   const agruparPorHorario = (clases, keys) => {
     const grupos = {};
@@ -288,8 +320,6 @@ const App = () => {
       alert('Error al guardar la revisión. Revisa la consola.');
     }
   };
-
- 
 
   const clases = compararAsistencias();
   const clasesKeys = filtrarClases(clases);
@@ -457,7 +487,7 @@ const App = () => {
                                 }`}
                               >
                                 <div className="flex justify-between items-center">
-                                  <span className="font-medium">{inc.icono} {estudiante.id}</span>
+                                  <span className="font-medium">{inc.icono} {estudiante.nombre}</span>
                                   {inc.mensaje && (
                                     <span className="text-xs text-gray-600">{inc.mensaje}</span>
                                   )}
@@ -538,7 +568,7 @@ const App = () => {
                   return (
                     <div key={estudiante.id} className="border rounded p-3">
                       <div className="flex justify-between items-center mb-2">
-                        <span className="font-medium">{inc.icono} {estudiante.id}</span>
+                        <span className="font-medium">{inc.icono} {estudiante.nombre}</span>
                         <span className={`text-sm px-2 py-1 rounded ${
                           inc.color === 'red' ? 'bg-red-100 text-red-700' :
                           inc.color === 'yellow' ? 'bg-yellow-100 text-yellow-700' :
