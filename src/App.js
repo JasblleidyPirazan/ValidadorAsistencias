@@ -153,7 +153,7 @@ const App = () => {
       const infoGrupo = maestroGrupos.find(g => g.Codigo === clase.grupo);
       if (infoGrupo) {
         clase.horario = infoGrupo.Hora;
-        clase.profesor = infoGrupo.Profesor;
+        clase.profesor = infoGrupo.Profe;  // ✅ CORREGIDO: Profesor → Profe
         clase.cancha = infoGrupo.Cancha;
       }
     });
@@ -284,7 +284,7 @@ const App = () => {
       ID_Revision: `REV_${Date.now()}`,
       Fecha: modalData.fecha,
       Grupo_Codigo: modalData.grupo,
-      Profesor: modalData.profesor || 'Sin asignar',
+      profesor: modalData.profesor || 'Sin asignar',  // ✅ CORREGIDO: Profesor → profesor (minúscula)
       Estado_Revision: 'Aprobado',
       Notas: notas,
       Revisado_Por: 'Coordinador',
@@ -320,7 +320,7 @@ const App = () => {
       ID_Revision: `REV_${Date.now()}`,
       Fecha: modalData.fecha,
       Grupo_Codigo: modalData.grupo,
-      Profesor: modalData.profesor || 'Sin asignar',
+      profesor: modalData.profesor || 'Sin asignar',  // ✅ CORREGIDO: Profesor → profesor (minúscula)
       Estado_Revision: 'Pendiente',
       Notas: notas,
       Revisado_Por: 'Coordinador',
@@ -353,7 +353,7 @@ const App = () => {
   const clasesPorHorario = agruparPorHorario(clases, clasesKeys);
 
   // Obtener listas únicas para filtros
-  const profesores = [...new Set(maestroGrupos.map(g => g.Profesor).filter(Boolean))];
+  const profesores = [...new Set(maestroGrupos.map(g => g.Profe).filter(Boolean))];  // ✅ CORREGIDO: Profesor → Profe
   const grupos = [...new Set(maestroGrupos.map(g => g.Codigo).filter(Boolean))];
   const canchas = [...new Set(maestroGrupos.map(g => g.Cancha).filter(Boolean))];
 
@@ -556,7 +556,7 @@ const App = () => {
                       <div className="flex justify-between items-start">
                         <div>
                           <p className="font-bold text-lg">{rev.Grupo_Codigo} - {rev.Fecha}</p>
-                          <p className="text-sm text-gray-600 mb-1">Profesor: {rev.Profesor}</p>
+                          <p className="text-sm text-gray-600 mb-1">Profesor: {rev.profesor}</p>
                           <p className={`text-sm font-medium ${rev.Estado_Revision === 'Aprobado' ? 'text-green-600' : 'text-yellow-600'}`}>
                             {rev.Estado_Revision}
                           </p>
