@@ -8,7 +8,9 @@ const API_CONFIG = {
   ASISTENCIAS_PF: `${API_BASE_URL}?sheet=asistencias`,
   ASISTENCIAS_PROFES: `${API_BASE_URL}?sheet=asistencias_profes`,
   REVISIONES: API_BASE_URL,
-  MAESTRO_GRUPOS: `${API_BASE_URL}?sheet=maestro_grupos`
+  MAESTRO_GRUPOS: `${API_BASE_URL}?sheet=maestro_grupos`,
+  ESTUDIANTES: 'Estudiantes',  
+  REVISIONES: 'Revisiones'
 };
 
 const App = () => {
@@ -132,15 +134,47 @@ const App = () => {
       return { tipo: 'reposicion', color: 'blue', icono: '🔵' };
     }
 
-    // Falta registro en una fuente
+    // Falta registro en PF pero profesor sí marcó
     if (!pf && profe) {
       return { tipo: 'falta_pf', color: 'yellow', icono: '⚠️', mensaje: 'Falta en PF' };
     }
+
+    // El profesor no marcó asistencia = Ausente implícito
     if (pf && !profe) {
-      return { tipo: 'falta_profe', color: 'yellow', icono: '⚠️', mensaje: 'Falta en Profe' };
+      const estadoPF = pf.Estado.toLowerCase();
+      
+      // Si el PF dice presente pero el profesor no marcó nada = CONFLICTO
+      if (estadoPF === 'presente') {
+        return { 
+          tipo: 'conflicto', 
+          color: 'red', 
+          icono: '❌', 
+          mensaje: 'PF: Presente vs Profe: Ausente (no marcó)' 
+        };
+      }
+      
+      // Si el PF dice ausente y el profesor no marcó nada = COINCIDEN
+      if (estadoPF === 'ausente') {
+        return { 
+          tipo: 'coincide_ausente', 
+          color: 'gray', 
+          icono: '⚪',
+          mensaje: 'Ambos ausentes'
+        };
+      }
+      
+      // Si el PF dice justificado y el profesor no marcó = Alerta
+      if (estadoPF === 'justificado' || estadoPF === 'justificada') {
+        return { 
+          tipo: 'justificado_vs_ausente', 
+          color: 'yellow', 
+          icono: '⚠️', 
+          mensaje: 'PF: Justificado vs Profe: Ausente (no marcó)' 
+        };
+      }
     }
 
-    // Comparar estados
+    // Comparar estados cuando ambos existen
     if (pf && profe) {
       const estadoPF = pf.Estado.toLowerCase();
       const estadoProfe = profe.Estado.toLowerCase();
@@ -152,32 +186,16 @@ const App = () => {
           return { tipo: 'coincide_ausente', color: 'gray', icono: '⚪' };
         }
       } else {
-        return { tipo: 'conflicto', color: 'red', icono: '❌', mensaje: `PF: ${pf.Estado} vs Profe: ${profe.Estado}` };
+        return { 
+          tipo: 'conflicto', 
+          color: 'red', 
+          icono: '❌', 
+          mensaje: `PF: ${pf.Estado} vs Profe: ${profe.Estado}` 
+        };
       }
     }
 
     return { tipo: 'desconocido', color: 'gray', icono: '❓' };
-  };
-
-  // Filtrar clases según filtros activos
-  const filtrarClases = (clases) => {
-    return Object.keys(clases).filter(key => {
-      const clase = clases[key];
-      
-      if (filters.profesor && clase.profesor !== filters.profesor) return false;
-      if (filters.grupo && clase.grupo !== filters.grupo) return false;
-      if (filters.cancha && clase.cancha !== filters.cancha) return false;
-      
-      if (filters.soloInconsistencias) {
-        const tieneInconsistencia = Object.values(clase.estudiantes).some(est => {
-          const inc = detectarInconsistencia(est);
-          return inc.tipo === 'conflicto' || inc.tipo === 'falta_pf' || inc.tipo === 'falta_profe';
-        });
-        if (!tieneInconsistencia) return false;
-      }
-
-      return true;
-    });
   };
 
   // Agrupar clases por horario
@@ -539,7 +557,7 @@ const App = () => {
                         </div>
                         <div className="bg-gray-50 p-2 rounded">
                           <p className="font-medium text-gray-600">Profesor:</p>
-                          <p>{estudiante.profe ? estudiante.profe.Estado : 'No registrado'}</p>
+                          <p>{estudiante.profe ? estudiante.profe.Estado : 'Ausente (no marcó)'}</p>
                         </div>
                       </div>
                     </div>
