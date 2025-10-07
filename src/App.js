@@ -271,40 +271,7 @@ const App = () => {
     }
   };
 
-  // Dejar pendiente
-  const dejarPendiente = async () => {
-    if (!modalData) return;
-
-    const revision = {
-      ID_Revision: `REV_${Date.now()}`,
-      Fecha: modalData.fecha,
-      Grupo_Codigo: modalData.grupo,
-      Estado_Revision: 'Pendiente',
-      Notas: notas,
-      Revisado_Por: 'Coordinador',
-      Timestamp: new Date().toISOString()
-    };
-
-    try {
-      const response = await fetch(API_CONFIG.REVISIONES, {
-        method: 'POST',
-        mode: 'no-cors', // Necesario para Apps Script
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(revision)
-      });
-
-      console.log('Revisión pendiente:', revision);
-      
-      setRevisiones([...revisiones, revision]);
-      setShowModal(false);
-      alert('Clase marcada como pendiente ⏸️');
-    } catch (error) {
-      console.error('Error marcando como pendiente:', error);
-      alert('Error al guardar la revisión. Revisa la consola.');
-    }
-  };
+ 
 
   const clases = compararAsistencias();
   const clasesKeys = filtrarClases(clases);
