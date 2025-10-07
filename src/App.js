@@ -1,14 +1,15 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Calendar, CheckCircle, AlertTriangle, Clock, X } from 'lucide-react';
 
-// Configuración de la API (comentada para no causar error de ESLint)
-// Descomentar cuando conectes las APIs reales
-// const API_CONFIG = {
-//   ASISTENCIAS_PF: 'TU_URL_API_ASISTENCIAS',
-//   ASISTENCIAS_PROFES: 'TU_URL_API_ASISTENCIAS_PROFES',
-//   REVISIONES: 'TU_URL_API_REVISIONES',
-//   MAESTRO_GRUPOS: 'TU_URL_API_MAESTRO_GRUPOS'
-// };
+// Configuración de la API
+const API_BASE_URL = 'https://script.google.com/macros/s/AKfycbwAlL3Q3zbUYDZRKmtYNIJjODrjwdMH1-TeROoxuzdl1Buc9qd8DkKcNkvkERznlEMn/exec';
+
+const API_CONFIG = {
+  ASISTENCIAS_PF: `${API_BASE_URL}?sheet=asistencias`,
+  ASISTENCIAS_PROFES: `${API_BASE_URL}?sheet=asistencias_profes`,
+  REVISIONES: API_BASE_URL,
+  MAESTRO_GRUPOS: `${API_BASE_URL}?sheet=maestro_grupos`
+};
 
 const App = () => {
   const [currentPage, setCurrentPage] = useState('pendientes');
@@ -28,34 +29,46 @@ const App = () => {
   const [modalData, setModalData] = useState(null);
   const [notas, setNotas] = useState('');
 
-  // Cargar datos al inicio - memoizado con useCallback
+  // Cargar datos desde la API
   const loadData = useCallback(async () => {
     setLoading(true);
     try {
-      // Simular carga de datos (reemplazar con fetch real)
-      const mockDataPF = [
-        { ID: 'AST1', Fecha: selectedDate, Estudiante_ID: 'M11', Grupo_Codigo: 'LM1943', Estado: 'Ausente', Tipo_Clase: 'Regular' },
-        { ID: 'AST2', Fecha: selectedDate, Estudiante_ID: 'M113', Grupo_Codigo: 'LM1924', Estado: 'Presente', Tipo_Clase: 'Regular' },
-        { ID: 'AST3', Fecha: selectedDate, Estudiante_ID: 'M125', Grupo_Codigo: 'LM1323', Estado: 'Presente', Tipo_Clase: 'Reposicion' }
-      ];
+      console.log('Cargando datos para fecha:', selectedDate);
       
-      const mockDataProfes = [
-        { ID: 'AST_P1', Fecha: selectedDate, Estudiante_ID: 'M11', Grupo_Codigo: 'LM1943', Estado: 'Presente', Profesor: 'Luis Miguel' },
-        { ID: 'AST_P2', Fecha: selectedDate, Estudiante_ID: 'M113', Grupo_Codigo: 'LM1924', Estado: 'Presente', Profesor: 'Brayan' }
-      ];
+      // Hacer peticiones en paralelo
+      const [resPF, resProfes, resMaestro] = await Promise.all([
+        fetch(API_CONFIG.ASISTENCIAS_PF),
+        fetch(API_CONFIG.ASISTENCIAS_PROFES),
+        fetch(API_CONFIG.MAESTRO_GRUPOS)
+      ]);
 
-      const mockMaestroGrupos = [
-        { Codigo: 'LM1943', Dias: 'lunes', Hora: '18:00 - 18:45', Profesor: 'Luis Miguel', Cancha: '1' },
-        { Codigo: 'LM1924', Dias: 'lunes', Hora: '18:00 - 18:45', Profesor: 'Brayan', Cancha: '2' },
-        { Codigo: 'LM1323', Dias: 'lunes', Hora: '15:45 - 16:30', Profesor: 'Ricardo', Cancha: '3' }
-      ];
+      const dataPF = await resPF.json();
+      const dataProfes = await resProfes.json();
+      const dataMaestro = await resMaestro.json();
 
-      setAsistenciasPF(mockDataPF);
-      setAsistenciasProfes(mockDataProfes);
-      setMaestroGrupos(mockMaestroGrupos);
+      console.log('Datos recibidos:', {
+        asistenciasPF: dataPF.count,
+        asistenciasProfes: dataProfes.count,
+        maestroGrupos: dataMaestro.count
+      });
+
+      // Filtrar por fecha seleccionada
+      const asistenciasFiltradas = dataPF.data.filter(a => a.Fecha === selectedDate);
+      const asistenciasProfesFiltr = dataProfes.data.filter(a => a.Fecha === selectedDate);
+
+      console.log('Datos filtrados por fecha:', {
+        asistenciasPF: asistenciasFiltradas.length,
+        asistenciasProfes: asistenciasProfesFiltr.length
+      });
+
+      setAsistenciasPF(asistenciasFiltradas);
+      setAsistenciasProfes(asistenciasProfesFiltr);
+      setMaestroGrupos(dataMaestro.data);
       setRevisiones([]);
+      
     } catch (error) {
       console.error('Error cargando datos:', error);
+      alert('Error al cargar datos. Por favor, revisa la consola para más detalles.');
     }
     setLoading(false);
   }, [selectedDate]);
@@ -202,12 +215,25 @@ const App = () => {
       Timestamp: new Date().toISOString()
     };
 
-    // Aquí harías el POST a tu API para guardar en Drive
-    console.log('Aprobando clase:', revision);
-    
-    setRevisiones([...revisiones, revision]);
-    setShowModal(false);
-    alert('Clase aprobada exitosamente');
+    try {
+      const response = await fetch(API_CONFIG.REVISIONES, {
+        method: 'POST',
+        mode: 'no-cors', // Necesario para Apps Script
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(revision)
+      });
+
+      console.log('Revisión aprobada:', revision);
+      
+      setRevisiones([...revisiones, revision]);
+      setShowModal(false);
+      alert('Clase aprobada exitosamente ✅');
+    } catch (error) {
+      console.error('Error aprobando clase:', error);
+      alert('Error al guardar la revisión. Revisa la consola.');
+    }
   };
 
   // Dejar pendiente
@@ -224,11 +250,25 @@ const App = () => {
       Timestamp: new Date().toISOString()
     };
 
-    console.log('Dejando pendiente:', revision);
-    
-    setRevisiones([...revisiones, revision]);
-    setShowModal(false);
-    alert('Clase marcada como pendiente');
+    try {
+      const response = await fetch(API_CONFIG.REVISIONES, {
+        method: 'POST',
+        mode: 'no-cors', // Necesario para Apps Script
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(revision)
+      });
+
+      console.log('Revisión pendiente:', revision);
+      
+      setRevisiones([...revisiones, revision]);
+      setShowModal(false);
+      alert('Clase marcada como pendiente ⏸️');
+    } catch (error) {
+      console.error('Error marcando como pendiente:', error);
+      alert('Error al guardar la revisión. Revisa la consola.');
+    }
   };
 
   const clases = compararAsistencias();
