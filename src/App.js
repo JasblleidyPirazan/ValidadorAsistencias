@@ -108,6 +108,15 @@ const App = () => {
       setAsistenciasProfes(asistenciasProfesFiltr);
       setMaestroGrupos(dataMaestro.data);
       
+      // Log para verificar los datos de maestro_grupos
+      console.log('=== MAESTRO GRUPOS CARGADO ===');
+      console.log('Total de grupos:', dataMaestro.data.length);
+      console.log('Muestra de primeros 3 grupos:', dataMaestro.data.slice(0, 3));
+      if (dataMaestro.data.length > 0) {
+        console.log('Columnas disponibles:', Object.keys(dataMaestro.data[0]));
+      }
+      console.log('==============================');
+      
       // Cargar todas las revisiones (no solo de la fecha seleccionada)
       setRevisiones(dataRevisiones?.data || []);
       
@@ -180,10 +189,18 @@ const App = () => {
       const clase = clases[key];
       const infoGrupo = maestroGrupos.find(g => g.Codigo === clase.grupo);
       if (infoGrupo) {
+        console.log(`Grupo ${clase.grupo}:`, {
+          Profe: infoGrupo.Profe,
+          Hora: infoGrupo.Hora,
+          Cancha: infoGrupo.Cancha,
+          Dia: infoGrupo.Dia
+        });
         clase.horario = infoGrupo.Hora;
         clase.profesor = infoGrupo.Profe;
         clase.cancha = infoGrupo.Cancha;
         clase.diaGrupo = infoGrupo.Dia; // Guardar el día del grupo
+      } else {
+        console.warn(`⚠️ No se encontró info del grupo ${clase.grupo} en maestro_grupos`);
       }
     });
 
@@ -552,15 +569,15 @@ const App = () => {
                         }`}
                       >
                         <div className="flex justify-between items-start mb-3">
-                          <div>
-                            <div className="flex items-baseline gap-2 mb-1">
-                              <h4 className="font-bold text-lg">{clase.grupo}</h4>
-                              <span className="text-sm text-gray-700">- {clase.profesor}</span>
-                            </div>
-                            <p className="text-xs text-gray-500">Cancha {clase.cancha}</p>
+                          <div className="w-full">
+                            <h4 className="font-bold text-lg mb-1">{clase.grupo}</h4>
+                            <p className="text-sm text-gray-700 font-medium">
+                              👤 {clase.profesor || 'Profesor no asignado'}
+                            </p>
+                            <p className="text-xs text-gray-500 mt-1">📍 Cancha {clase.cancha || 'N/A'}</p>
                           </div>
                           {tieneInconsistencia && (
-                            <AlertTriangle className="text-red-500" size={24} />
+                            <AlertTriangle className="text-red-500 flex-shrink-0" size={24} />
                           )}
                         </div>
 
