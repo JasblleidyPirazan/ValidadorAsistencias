@@ -401,8 +401,8 @@ const App = () => {
     }
   };
 
-  // Dejar pendiente
-  const dejarPendiente = async () => {
+  // Cancelar por lluvia
+  const cancelarPorLluvia = async () => {
     if (!modalData) return;
 
     const revision = {
@@ -410,7 +410,7 @@ const App = () => {
       Fecha: modalData.fecha,
       Grupo_Codigo: modalData.grupo,
       profesor: modalData.profesor || 'Sin asignar',
-      Estado_Revision: 'Pendiente',
+      Estado_Revision: 'Cancelada por Lluvia',
       Notas: notas,
       Revisado_Por: 'Coordinador',
       Timestamp: new Date().toISOString()
@@ -426,14 +426,14 @@ const App = () => {
         body: JSON.stringify(revision)
       });
 
-      console.log('Revisión pendiente:', revision);
+      console.log('Clase cancelada por lluvia:', revision);
       
       // Actualizar estado local inmediatamente
       setRevisiones([...revisiones, revision]);
       setShowModal(false);
-      alert('Clase marcada como pendiente ⏸️\nLa clase ya no aparecerá en Pendientes.');
+      alert('Clase cancelada por lluvia 🌧️\nLa clase ya no aparecerá en Pendientes y se guardó en el Historial.');
     } catch (error) {
-      console.error('Error marcando como pendiente:', error);
+      console.error('Error cancelando clase:', error);
       alert('Error al guardar la revisión. Revisa la consola.');
     }
   };
@@ -674,9 +674,15 @@ const App = () => {
                             <span className={`px-3 py-1 rounded-full text-sm font-medium ${
                               rev.Estado_Revision === 'Aprobado' 
                                 ? 'bg-green-100 text-green-700' 
+                                : rev.Estado_Revision === 'Cancelada por Lluvia'
+                                ? 'bg-blue-100 text-blue-700'
                                 : 'bg-yellow-100 text-yellow-700'
                             }`}>
-                              {rev.Estado_Revision === 'Aprobado' ? '✅ Aprobado' : '⏸️ Pendiente'}
+                              {rev.Estado_Revision === 'Aprobado' 
+                                ? '✅ Aprobado' 
+                                : rev.Estado_Revision === 'Cancelada por Lluvia'
+                                ? '🌧️ Cancelada por Lluvia'
+                                : '⏸️ Pendiente'}
                             </span>
                           </div>
                           <p className="text-sm text-gray-600 mb-1">Profesor: {rev.profesor}</p>
@@ -768,10 +774,10 @@ const App = () => {
                   ✅ Aprobar clase
                 </button>
                 <button
-                  onClick={dejarPendiente}
-                  className="flex-1 py-3 bg-yellow-600 text-white rounded font-medium hover:bg-yellow-700 transition"
+                  onClick={cancelarPorLluvia}
+                  className="flex-1 py-3 bg-blue-600 text-white rounded font-medium hover:bg-blue-700 transition"
                 >
-                  ⏸️ Dejar pendiente
+                  🌧️ Cancelada por lluvia
                 </button>
               </div>
             </div>
