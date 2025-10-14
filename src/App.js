@@ -145,6 +145,24 @@ const App = () => {
     return diasSemana[date.getDay()];
   };
 
+  // Verificar si un grupo tiene clase en un día específico
+  const grupoTieneClaseEnDia = (infoGrupo, diaBuscado) => {
+    if (!infoGrupo) return false;
+    
+    // Opción 1: Usar las columnas booleanas individuales (Lunes, Martes, etc.)
+    if (infoGrupo[diaBuscado] === true || infoGrupo[diaBuscado] === 'TRUE' || infoGrupo[diaBuscado] === 'true') {
+      return true;
+    }
+    
+    // Opción 2: Buscar en la columna "Días" (si existe)
+    if (infoGrupo.Días || infoGrupo.Dias) {
+      const diasTexto = (infoGrupo.Días || infoGrupo.Dias).toString();
+      return diasTexto.includes(diaBuscado);
+    }
+    
+    return false;
+  };
+
   // Comparar asistencias y detectar inconsistencias
   const compararAsistencias = () => {
     const clases = {};
@@ -193,14 +211,16 @@ const App = () => {
           Profe: infoGrupo.Profe,
           Hora: infoGrupo.Hora,
           Cancha: infoGrupo.Cancha,
-          Dia: infoGrupo.Dia
+          Días: infoGrupo.Días || infoGrupo.Dias,
+          [diaSeleccionado]: infoGrupo[diaSeleccionado]
         });
         clase.horario = infoGrupo.Hora;
         clase.profesor = infoGrupo.Profe;
         clase.cancha = infoGrupo.Cancha;
-        clase.diaGrupo = infoGrupo.Dia; // Guardar el día del grupo
+        clase.tieneClaseHoy = grupoTieneClaseEnDia(infoGrupo, diaSeleccionado);
       } else {
         console.warn(`⚠️ No se encontró info del grupo ${clase.grupo} en maestro_grupos`);
+        clase.tieneClaseHoy = true; // Por defecto incluir si no se encuentra info
       }
     });
 
@@ -208,11 +228,11 @@ const App = () => {
     const clasesDelDia = {};
     Object.keys(clases).forEach(key => {
       const clase = clases[key];
-      // Solo incluir si el día del grupo coincide con el día seleccionado
-      if (!clase.diaGrupo || clase.diaGrupo === diaSeleccionado) {
+      // Solo incluir si el grupo tiene clase el día seleccionado
+      if (clase.tieneClaseHoy) {
         clasesDelDia[key] = clase;
       } else {
-        console.log(`❌ Clase ${clase.grupo} filtrada: día del grupo "${clase.diaGrupo}" no coincide con "${diaSeleccionado}"`);
+        console.log(`❌ Clase ${clase.grupo} filtrada: no tiene clase el ${diaSeleccionado}`);
       }
     });
 
