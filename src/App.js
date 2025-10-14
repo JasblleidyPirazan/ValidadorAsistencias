@@ -8,6 +8,7 @@ const API_CONFIG = {
   ASISTENCIAS_PF: `${API_BASE_URL}?sheet=asistencias`,
   ASISTENCIAS_PROFES: `${API_BASE_URL}?sheet=asistencias_profes`,
   REVISIONES: API_BASE_URL,
+  REVISIONES_GET: `${API_BASE_URL}?sheet=revisiones`,
   MAESTRO_GRUPOS: `${API_BASE_URL}?sheet=maestro_grupos`,
   ESTUDIANTES: `${API_BASE_URL}?sheet=estudiantes`
 };
@@ -37,24 +38,27 @@ const App = () => {
     try {
       console.log('Cargando datos para fecha:', selectedDate);
       
-      // Hacer peticiones en paralelo
-      const [resPF, resProfes, resMaestro, resEstudiantes] = await Promise.all([
+      // Hacer peticiones en paralelo (ahora incluye revisiones)
+      const [resPF, resProfes, resMaestro, resEstudiantes, resRevisiones] = await Promise.all([
         fetch(API_CONFIG.ASISTENCIAS_PF),
         fetch(API_CONFIG.ASISTENCIAS_PROFES),
         fetch(API_CONFIG.MAESTRO_GRUPOS),
-        fetch(API_CONFIG.ESTUDIANTES)
+        fetch(API_CONFIG.ESTUDIANTES),
+        fetch(API_CONFIG.REVISIONES_GET)
       ]);
 
       const dataPF = await resPF.json();
       const dataProfes = await resProfes.json();
       const dataMaestro = await resMaestro.json();
       const dataEstudiantes = await resEstudiantes.json();
+      const dataRevisiones = await resRevisiones.json();
 
       console.log('Respuestas completas de API:', {
         dataPF,
         dataProfes,
         dataMaestro,
-        dataEstudiantes
+        dataEstudiantes,
+        dataRevisiones
       });
 
       // Validar que las respuestas tengan la estructura correcta
@@ -63,7 +67,8 @@ const App = () => {
           dataPF: dataPF?.data ? 'OK' : 'ERROR',
           dataProfes: dataProfes?.data ? 'OK' : 'ERROR',
           dataMaestro: dataMaestro?.data ? 'OK' : 'ERROR',
-          dataEstudiantes: dataEstudiantes?.data ? 'OK' : 'ERROR'
+          dataEstudiantes: dataEstudiantes?.data ? 'OK' : 'ERROR',
+          dataRevisiones: dataRevisiones?.data ? 'OK' : 'ERROR'
         });
         throw new Error('Las respuestas de la API no tienen la estructura esperada. Verifica que el Apps Script esté desplegado correctamente.');
       }
@@ -72,7 +77,8 @@ const App = () => {
         asistenciasPF: dataPF.count,
         asistenciasProfes: dataProfes.count,
         maestroGrupos: dataMaestro.count,
-        estudiantes: dataEstudiantes?.count || 0
+        estudiantes: dataEstudiantes?.count || 0,
+        revisiones: dataRevisiones?.count || 0
       });
 
       // Crear mapa de estudiantes ID -> Nombre (con validación)
@@ -101,7 +107,9 @@ const App = () => {
       setAsistenciasPF(asistenciasFiltradas);
       setAsistenciasProfes(asistenciasProfesFiltr);
       setMaestroGrupos(dataMaestro.data);
-      setRevisiones([]);
+      
+      // Cargar todas las revisiones (no solo de la fecha seleccionada)
+      setRevisiones(dataRevisiones?.data || []);
       
     } catch (error) {
       console.error('Error cargando datos:', error);
@@ -113,6 +121,13 @@ const App = () => {
   useEffect(() => {
     loadData();
   }, [loadData]);
+
+  // Verificar si una clase ya fue revisada
+  const claseYaRevisada = (fecha, grupo) => {
+    return revisiones.some(rev => 
+      rev.Fecha === fecha && rev.Grupo_Codigo === grupo
+    );
+  };
 
   // Comparar asistencias y detectar inconsistencias
   const compararAsistencias = () => {
@@ -153,7 +168,7 @@ const App = () => {
       const infoGrupo = maestroGrupos.find(g => g.Codigo === clase.grupo);
       if (infoGrupo) {
         clase.horario = infoGrupo.Hora;
-        clase.profesor = infoGrupo.Profe;  // ✅ CORREGIDO: Profesor → Profe
+        clase.profesor = infoGrupo.Profe;
         clase.cancha = infoGrupo.Cancha;
       }
     });
@@ -239,6 +254,11 @@ const App = () => {
     return Object.keys(clases).filter(key => {
       const clase = clases[key];
       
+      // NUEVO: Filtrar clases ya revisadas en la vista de pendientes
+      if (currentPage === 'pendientes' && claseYaRevisada(clase.fecha, clase.grupo)) {
+        return false;
+      }
+      
       if (filters.profesor && clase.profesor !== filters.profesor) return false;
       if (filters.grupo && clase.grupo !== filters.grupo) return false;
       if (filters.cancha && clase.cancha !== filters.cancha) return false;
@@ -284,7 +304,7 @@ const App = () => {
       ID_Revision: `REV_${Date.now()}`,
       Fecha: modalData.fecha,
       Grupo_Codigo: modalData.grupo,
-      profesor: modalData.profesor || 'Sin asignar',  // ✅ CORREGIDO: Profesor → profesor (minúscula)
+      profesor: modalData.profesor || 'Sin asignar',
       Estado_Revision: 'Aprobado',
       Notas: notas,
       Revisado_Por: 'Coordinador',
@@ -303,9 +323,10 @@ const App = () => {
 
       console.log('Revisión aprobada:', revision);
       
+      // Actualizar estado local inmediatamente
       setRevisiones([...revisiones, revision]);
       setShowModal(false);
-      alert('Clase aprobada exitosamente ✅');
+      alert('Clase aprobada exitosamente ✅\nLa clase ya no aparecerá en Pendientes.');
     } catch (error) {
       console.error('Error aprobando clase:', error);
       alert('Error al guardar la revisión. Revisa la consola.');
@@ -320,7 +341,7 @@ const App = () => {
       ID_Revision: `REV_${Date.now()}`,
       Fecha: modalData.fecha,
       Grupo_Codigo: modalData.grupo,
-      profesor: modalData.profesor || 'Sin asignar',  // ✅ CORREGIDO: Profesor → profesor (minúscula)
+      profesor: modalData.profesor || 'Sin asignar',
       Estado_Revision: 'Pendiente',
       Notas: notas,
       Revisado_Por: 'Coordinador',
@@ -339,9 +360,10 @@ const App = () => {
 
       console.log('Revisión pendiente:', revision);
       
+      // Actualizar estado local inmediatamente
       setRevisiones([...revisiones, revision]);
       setShowModal(false);
-      alert('Clase marcada como pendiente ⏸️');
+      alert('Clase marcada como pendiente ⏸️\nLa clase ya no aparecerá en Pendientes.');
     } catch (error) {
       console.error('Error marcando como pendiente:', error);
       alert('Error al guardar la revisión. Revisa la consola.');
@@ -353,9 +375,12 @@ const App = () => {
   const clasesPorHorario = agruparPorHorario(clases, clasesKeys);
 
   // Obtener listas únicas para filtros
-  const profesores = [...new Set(maestroGrupos.map(g => g.Profe).filter(Boolean))];  // ✅ CORREGIDO: Profesor → Profe
+  const profesores = [...new Set(maestroGrupos.map(g => g.Profe).filter(Boolean))];
   const grupos = [...new Set(maestroGrupos.map(g => g.Codigo).filter(Boolean))];
   const canchas = [...new Set(maestroGrupos.map(g => g.Cancha).filter(Boolean))];
+
+  // Filtrar revisiones por fecha seleccionada para el historial
+  const revisionesFiltradas = revisiones.filter(rev => rev.Fecha === selectedDate);
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -423,15 +448,17 @@ const App = () => {
             {canchas.map(c => <option key={c} value={c}>Cancha {c}</option>)}
           </select>
 
-          <label className="flex items-center gap-2 cursor-pointer">
-            <input
-              type="checkbox"
-              checked={filters.soloInconsistencias}
-              onChange={(e) => setFilters({ ...filters, soloInconsistencias: e.target.checked })}
-              className="w-4 h-4"
-            />
-            <span>Solo inconsistencias</span>
-          </label>
+          {currentPage === 'pendientes' && (
+            <label className="flex items-center gap-2 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={filters.soloInconsistencias}
+                onChange={(e) => setFilters({ ...filters, soloInconsistencias: e.target.checked })}
+                className="w-4 h-4"
+              />
+              <span>Solo inconsistencias</span>
+            </label>
+          )}
 
           <button
             onClick={() => setFilters({ profesor: '', grupo: '', cancha: '', soloInconsistencias: false })}
@@ -443,18 +470,20 @@ const App = () => {
       </div>
 
       {/* Leyenda */}
-      <div className="max-w-7xl mx-auto px-4 mb-4">
-        <div className="bg-white rounded-lg shadow-md p-4">
-          <h3 className="font-bold mb-2">Leyenda:</h3>
-          <div className="flex gap-6 flex-wrap text-sm">
-            <span className="flex items-center gap-2"><span className="text-green-600">✅</span> Coincide (Presente)</span>
-            <span className="flex items-center gap-2"><span className="text-red-600">❌</span> Conflicto (Estados diferentes)</span>
-            <span className="flex items-center gap-2"><span className="text-yellow-600">⚠️</span> Falta en una fuente</span>
-            <span className="flex items-center gap-2"><span className="text-blue-600">🔵</span> Reposición</span>
-            <span className="flex items-center gap-2"><span className="text-gray-500">⚪</span> Coincide (Ausente)</span>
+      {currentPage === 'pendientes' && (
+        <div className="max-w-7xl mx-auto px-4 mb-4">
+          <div className="bg-white rounded-lg shadow-md p-4">
+            <h3 className="font-bold mb-2">Leyenda:</h3>
+            <div className="flex gap-6 flex-wrap text-sm">
+              <span className="flex items-center gap-2"><span className="text-green-600">✅</span> Coincide (Presente)</span>
+              <span className="flex items-center gap-2"><span className="text-red-600">❌</span> Conflicto (Estados diferentes)</span>
+              <span className="flex items-center gap-2"><span className="text-yellow-600">⚠️</span> Falta en una fuente</span>
+              <span className="flex items-center gap-2"><span className="text-blue-600">🔵</span> Reposición</span>
+              <span className="flex items-center gap-2"><span className="text-gray-500">⚪</span> Coincide (Ausente)</span>
+            </div>
           </div>
         </div>
-      </div>
+      )}
 
       {/* Contenido principal */}
       <div className="max-w-7xl mx-auto p-4">
@@ -465,7 +494,7 @@ const App = () => {
           </div>
         ) : currentPage === 'pendientes' ? (
           <>
-            <h2 className="text-2xl font-bold mb-4">Clases del {selectedDate}</h2>
+            <h2 className="text-2xl font-bold mb-4">Clases pendientes del {selectedDate}</h2>
             
             {Object.keys(clasesPorHorario).sort().map(horario => (
               <div key={horario} className="mb-6">
@@ -539,30 +568,48 @@ const App = () => {
 
             {clasesKeys.length === 0 && (
               <div className="text-center py-12 bg-white rounded-lg shadow-md">
-                <p className="text-gray-500">No hay clases para mostrar con los filtros seleccionados</p>
+                <CheckCircle className="mx-auto mb-4 text-green-500" size={64} />
+                <p className="text-xl font-semibold text-gray-700 mb-2">¡Todo al día!</p>
+                <p className="text-gray-500">No hay clases pendientes de revisión para esta fecha</p>
               </div>
             )}
           </>
         ) : (
           <div>
-            <h2 className="text-2xl font-bold mb-4">Historial de Revisiones</h2>
+            <h2 className="text-2xl font-bold mb-4">Historial de Revisiones - {selectedDate}</h2>
             <div className="bg-white rounded-lg shadow-md p-6">
-              {revisiones.length === 0 ? (
-                <p className="text-gray-500 text-center">No hay revisiones en el historial</p>
+              {revisionesFiltradas.length === 0 ? (
+                <div className="text-center py-8">
+                  <Clock className="mx-auto mb-4 text-gray-400" size={48} />
+                  <p className="text-gray-500">No hay revisiones para esta fecha</p>
+                </div>
               ) : (
                 <div className="space-y-3">
-                  {revisiones.map(rev => (
-                    <div key={rev.ID_Revision} className="border-b pb-3">
+                  {revisionesFiltradas.map(rev => (
+                    <div key={rev.ID_Revision} className="border-b pb-3 last:border-b-0">
                       <div className="flex justify-between items-start">
-                        <div>
-                          <p className="font-bold text-lg">{rev.Grupo_Codigo} - {rev.Fecha}</p>
+                        <div className="flex-1">
+                          <div className="flex items-center gap-3 mb-2">
+                            <p className="font-bold text-lg">{rev.Grupo_Codigo}</p>
+                            <span className={`px-3 py-1 rounded-full text-sm font-medium ${
+                              rev.Estado_Revision === 'Aprobado' 
+                                ? 'bg-green-100 text-green-700' 
+                                : 'bg-yellow-100 text-yellow-700'
+                            }`}>
+                              {rev.Estado_Revision === 'Aprobado' ? '✅ Aprobado' : '⏸️ Pendiente'}
+                            </span>
+                          </div>
                           <p className="text-sm text-gray-600 mb-1">Profesor: {rev.profesor}</p>
-                          <p className={`text-sm font-medium ${rev.Estado_Revision === 'Aprobado' ? 'text-green-600' : 'text-yellow-600'}`}>
-                            {rev.Estado_Revision}
+                          <p className="text-xs text-gray-500 mb-2">
+                            Revisado por: {rev.Revisado_Por} - {new Date(rev.Timestamp).toLocaleString()}
                           </p>
-                          {rev.Notas && <p className="text-sm text-gray-600 mt-2 italic">"{rev.Notas}"</p>}
+                          {rev.Notas && (
+                            <div className="bg-gray-50 p-3 rounded mt-2">
+                              <p className="text-sm font-medium text-gray-700 mb-1">Notas:</p>
+                              <p className="text-sm text-gray-600 italic">"{rev.Notas}"</p>
+                            </div>
+                          )}
                         </div>
-                        <span className="text-xs text-gray-400">{new Date(rev.Timestamp).toLocaleString()}</span>
                       </div>
                     </div>
                   ))}
