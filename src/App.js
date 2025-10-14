@@ -129,6 +129,13 @@ const App = () => {
     );
   };
 
+  // Obtener día de la semana en español
+  const obtenerDiaSemana = (fecha) => {
+    const diasSemana = ['Domingo', 'Lunes', 'Martes', 'Miercoles', 'Jueves', 'Viernes', 'Sabado'];
+    const date = new Date(fecha + 'T00:00:00'); // Agregar hora para evitar problemas de zona horaria
+    return diasSemana[date.getDay()];
+  };
+
   // Comparar asistencias y detectar inconsistencias
   const compararAsistencias = () => {
     const clases = {};
@@ -162,7 +169,13 @@ const App = () => {
       }
     });
 
-    // Agregar información del maestro de grupos
+    // Agregar información del maestro de grupos y filtrar por día de la semana
+    const diaSeleccionado = obtenerDiaSemana(selectedDate);
+    console.log('=== FILTRADO POR DÍA ===');
+    console.log('Fecha seleccionada:', selectedDate);
+    console.log('Día de la semana:', diaSeleccionado);
+    console.log('Total de clases antes de filtrar:', Object.keys(clases).length);
+    
     Object.keys(clases).forEach(key => {
       const clase = clases[key];
       const infoGrupo = maestroGrupos.find(g => g.Codigo === clase.grupo);
@@ -170,10 +183,26 @@ const App = () => {
         clase.horario = infoGrupo.Hora;
         clase.profesor = infoGrupo.Profe;
         clase.cancha = infoGrupo.Cancha;
+        clase.diaGrupo = infoGrupo.Dia; // Guardar el día del grupo
       }
     });
 
-    return clases;
+    // Filtrar solo las clases del día correcto
+    const clasesDelDia = {};
+    Object.keys(clases).forEach(key => {
+      const clase = clases[key];
+      // Solo incluir si el día del grupo coincide con el día seleccionado
+      if (!clase.diaGrupo || clase.diaGrupo === diaSeleccionado) {
+        clasesDelDia[key] = clase;
+      } else {
+        console.log(`❌ Clase ${clase.grupo} filtrada: día del grupo "${clase.diaGrupo}" no coincide con "${diaSeleccionado}"`);
+      }
+    });
+
+    console.log('Total de clases después de filtrar:', Object.keys(clasesDelDia).length);
+    console.log('=======================');
+
+    return clasesDelDia;
   };
 
   // Detectar tipo de inconsistencia
@@ -494,7 +523,12 @@ const App = () => {
           </div>
         ) : currentPage === 'pendientes' ? (
           <>
-            <h2 className="text-2xl font-bold mb-4">Clases pendientes del {selectedDate}</h2>
+            <div className="mb-4">
+              <h2 className="text-2xl font-bold">Clases pendientes del {selectedDate}</h2>
+              <p className="text-gray-600 mt-1">
+                {obtenerDiaSemana(selectedDate)} - Mostrando solo grupos de este día
+              </p>
+            </div>
             
             {Object.keys(clasesPorHorario).sort().map(horario => (
               <div key={horario} className="mb-6">
@@ -519,8 +553,10 @@ const App = () => {
                       >
                         <div className="flex justify-between items-start mb-3">
                           <div>
-                            <h4 className="font-bold text-lg">{clase.grupo}</h4>
-                            <p className="text-sm text-gray-600">{clase.profesor}</p>
+                            <div className="flex items-baseline gap-2 mb-1">
+                              <h4 className="font-bold text-lg">{clase.grupo}</h4>
+                              <span className="text-sm text-gray-700">- {clase.profesor}</span>
+                            </div>
                             <p className="text-xs text-gray-500">Cancha {clase.cancha}</p>
                           </div>
                           {tieneInconsistencia && (
@@ -570,7 +606,12 @@ const App = () => {
               <div className="text-center py-12 bg-white rounded-lg shadow-md">
                 <CheckCircle className="mx-auto mb-4 text-green-500" size={64} />
                 <p className="text-xl font-semibold text-gray-700 mb-2">¡Todo al día!</p>
-                <p className="text-gray-500">No hay clases pendientes de revisión para esta fecha</p>
+                <p className="text-gray-500">No hay clases pendientes de revisión para {obtenerDiaSemana(selectedDate)}, {selectedDate}</p>
+                <p className="text-sm text-gray-400 mt-2">
+                  {filters.profesor || filters.grupo || filters.cancha || filters.soloInconsistencias 
+                    ? 'Intenta limpiar los filtros para ver más resultados' 
+                    : 'Las clases se filtran automáticamente por día de la semana'}
+                </p>
               </div>
             )}
           </>
