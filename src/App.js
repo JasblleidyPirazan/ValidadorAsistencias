@@ -150,14 +150,16 @@ const App = () => {
     if (!infoGrupo) return false;
     
     // Opción 1: Usar las columnas booleanas individuales (Lunes, Martes, etc.)
-    if (infoGrupo[diaBuscado] === true || infoGrupo[diaBuscado] === 'TRUE' || infoGrupo[diaBuscado] === 'true') {
+    const valorDia = infoGrupo[diaBuscado];
+    if (valorDia === true || valorDia === 'TRUE' || valorDia === 'true' || valorDia === 1) {
       return true;
     }
     
     // Opción 2: Buscar en la columna "Días" (si existe)
     if (infoGrupo.Días || infoGrupo.Dias) {
-      const diasTexto = (infoGrupo.Días || infoGrupo.Dias).toString();
-      return diasTexto.includes(diaBuscado);
+      const diasTexto = (infoGrupo.Días || infoGrupo.Dias).toString().toLowerCase();
+      const diaBuscadoLower = diaBuscado.toLowerCase();
+      return diasTexto.includes(diaBuscadoLower);
     }
     
     return false;
@@ -205,7 +207,7 @@ const App = () => {
     
     Object.keys(clases).forEach(key => {
       const clase = clases[key];
-      const infoGrupo = maestroGrupos.find(g => g.Codigo === clase.grupo);
+      const infoGrupo = maestroGrupos.find(g => g.Código === clase.grupo);
       if (infoGrupo) {
         console.log(`Grupo ${clase.grupo}:`, {
           Profe: infoGrupo.Profe,
@@ -442,7 +444,7 @@ const App = () => {
 
   // Obtener listas únicas para filtros
   const profesores = [...new Set(maestroGrupos.map(g => g.Profe).filter(Boolean))];
-  const grupos = [...new Set(maestroGrupos.map(g => g.Codigo).filter(Boolean))];
+  const grupos = [...new Set(maestroGrupos.map(g => g.Código).filter(Boolean))];
   const canchas = [...new Set(maestroGrupos.map(g => g.Cancha).filter(Boolean))];
 
   // Filtrar revisiones por fecha seleccionada para el historial
