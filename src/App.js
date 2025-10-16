@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { Calendar, CheckCircle, AlertTriangle, Clock, X } from 'lucide-react';
 
 // Configuración de la API
@@ -108,15 +108,6 @@ const App = () => {
       setAsistenciasProfes(asistenciasProfesFiltr);
       setMaestroGrupos(dataMaestro.data);
       
-      // Log para verificar los datos de maestro_grupos
-      console.log('=== MAESTRO GRUPOS CARGADO ===');
-      console.log('Total de grupos:', dataMaestro.data.length);
-      console.log('Muestra de primeros 3 grupos:', dataMaestro.data.slice(0, 3));
-      if (dataMaestro.data.length > 0) {
-        console.log('Columnas disponibles:', Object.keys(dataMaestro.data[0]));
-      }
-      console.log('==============================');
-      
       // Cargar todas las revisiones (no solo de la fecha seleccionada)
       setRevisiones(dataRevisiones?.data || []);
       
@@ -165,15 +156,26 @@ const App = () => {
     return false;
   };
 
-  // Comparar asistencias y detectar inconsistencias
-  const compararAsistencias = () => {
-    const clases = {};
+  // ============ OPTIMIZACIÓN: Crear mapa de maestroGrupos para búsquedas O(1) ============
+  const maestroGruposMap = useMemo(() => {
+    const map = {};
+    maestroGrupos.forEach(g => {
+      if (g.Código) {
+        map[g.Código] = g;
+      }
+    });
+    return map;
+  }, [maestroGrupos]);
+
+  // ============ OPTIMIZACIÓN: useMemo para comparar asistencias ============
+  const clases = useMemo(() => {
+    const clasesTemp = {};
 
     // Agrupar por Fecha + Grupo_Codigo
     [...asistenciasPF, ...asistenciasProfes].forEach(asistencia => {
       const key = `${asistencia.Fecha}_${asistencia.Grupo_Codigo}`;
-      if (!clases[key]) {
-        clases[key] = {
+      if (!clasesTemp[key]) {
+        clasesTemp[key] = {
           fecha: asistencia.Fecha,
           grupo: asistencia.Grupo_Codigo,
           estudiantes: {}
@@ -181,8 +183,8 @@ const App = () => {
       }
 
       const estudianteKey = asistencia.Estudiante_ID;
-      if (!clases[key].estudiantes[estudianteKey]) {
-        clases[key].estudiantes[estudianteKey] = {
+      if (!clasesTemp[key].estudiantes[estudianteKey]) {
+        clasesTemp[key].estudiantes[estudianteKey] = {
           id: estudianteKey,
           nombre: estudiantes[estudianteKey] || estudianteKey,
           pf: null,
@@ -192,57 +194,37 @@ const App = () => {
 
       // Determinar si viene del PF o del Profe
       if (asistencia.Enviado_Por === 'usuario' || asistenciasPF.includes(asistencia)) {
-        clases[key].estudiantes[estudianteKey].pf = asistencia;
+        clasesTemp[key].estudiantes[estudianteKey].pf = asistencia;
       } else {
-        clases[key].estudiantes[estudianteKey].profe = asistencia;
+        clasesTemp[key].estudiantes[estudianteKey].profe = asistencia;
       }
     });
 
     // Agregar información del maestro de grupos y filtrar por día de la semana
     const diaSeleccionado = obtenerDiaSemana(selectedDate);
-    console.log('=== FILTRADO POR DÍA ===');
-    console.log('Fecha seleccionada:', selectedDate);
-    console.log('Día de la semana:', diaSeleccionado);
-    console.log('Total de clases antes de filtrar:', Object.keys(clases).length);
-    
-    Object.keys(clases).forEach(key => {
-      const clase = clases[key];
-      const infoGrupo = maestroGrupos.find(g => g.Código === clase.grupo);
+    const clasesDelDia = {};
+
+    Object.keys(clasesTemp).forEach(key => {
+      const clase = clasesTemp[key];
+      const infoGrupo = maestroGruposMap[clase.grupo]; // ⚡ Búsqueda O(1) en lugar de .find()
+
       if (infoGrupo) {
-        console.log(`Grupo ${clase.grupo}:`, {
-          Profe: infoGrupo.Profe,
-          Hora: infoGrupo.Hora,
-          Cancha: infoGrupo.Cancha,
-          Días: infoGrupo.Días || infoGrupo.Dias,
-          [diaSeleccionado]: infoGrupo[diaSeleccionado]
-        });
         clase.horario = infoGrupo.Hora;
         clase.profesor = infoGrupo.Profe;
         clase.cancha = infoGrupo.Cancha;
         clase.tieneClaseHoy = grupoTieneClaseEnDia(infoGrupo, diaSeleccionado);
       } else {
-        console.warn(`⚠️ No se encontró info del grupo ${clase.grupo} en maestro_grupos`);
         clase.tieneClaseHoy = true; // Por defecto incluir si no se encuentra info
       }
-    });
 
-    // Filtrar solo las clases del día correcto
-    const clasesDelDia = {};
-    Object.keys(clases).forEach(key => {
-      const clase = clases[key];
       // Solo incluir si el grupo tiene clase el día seleccionado
       if (clase.tieneClaseHoy) {
         clasesDelDia[key] = clase;
-      } else {
-        console.log(`❌ Clase ${clase.grupo} filtrada: no tiene clase el ${diaSeleccionado}`);
       }
     });
 
-    console.log('Total de clases después de filtrar:', Object.keys(clasesDelDia).length);
-    console.log('=======================');
-
     return clasesDelDia;
-  };
+  }, [asistenciasPF, asistenciasProfes, maestroGruposMap, estudiantes, selectedDate]);
 
   // Detectar tipo de inconsistencia
   const detectarInconsistencia = (estudiante) => {
@@ -438,7 +420,6 @@ const App = () => {
     }
   };
 
-  const clases = compararAsistencias();
   const clasesKeys = filtrarClases(clases);
   const clasesPorHorario = agruparPorHorario(clases, clasesKeys);
 
