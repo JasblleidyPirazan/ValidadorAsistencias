@@ -31,13 +31,17 @@ const App = () => {
   const [showModal, setShowModal] = useState(false);
   const [modalData, setModalData] = useState(null);
   const [notas, setNotas] = useState('');
+  const [gruposNoEncontrados, setGruposNoEncontrados] = useState([]);
+  const [errorCarga, setErrorCarga] = useState(null);
 
   // Cargar datos desde la API
   const loadData = useCallback(async () => {
     setLoading(true);
+    setErrorCarga(null);
+    setGruposNoEncontrados([]);
     try {
       console.log('Cargando datos para fecha:', selectedDate);
-      
+
       // Hacer peticiones en paralelo (ahora incluye revisiones)
       const [resPF, resProfes, resMaestro, resEstudiantes, resRevisiones] = await Promise.all([
         fetch(API_CONFIG.ASISTENCIAS_PF),
@@ -72,6 +76,36 @@ const App = () => {
         });
         throw new Error('Las respuestas de la API no tienen la estructura esperada. Verifica que el Apps Script esté desplegado correctamente.');
       }
+
+      // Validación exhaustiva de campos requeridos
+      const validarCamposRequeridos = (data, campos, nombre) => {
+        const errores = [];
+        data.forEach((registro, index) => {
+          campos.forEach(campo => {
+            if (registro[campo] === undefined || registro[campo] === null || registro[campo] === '') {
+              errores.push(`${nombre}[${index}]: Campo "${campo}" vacío o faltante`);
+            }
+          });
+        });
+        if (errores.length > 0) {
+          console.warn(`Validación ${nombre}:`, errores.slice(0, 10)); // Mostrar primeros 10
+          if (errores.length > 10) {
+            console.warn(`... y ${errores.length - 10} errores más`);
+          }
+        }
+        return errores.length;
+      };
+
+      // Validar datos críticos
+      const erroresPF = validarCamposRequeridos(dataPF.data, ['Fecha', 'Grupo_Codigo', 'Estudiante_ID', 'Estado'], 'AsistenciasPF');
+      const erroresProfes = validarCamposRequeridos(dataProfes.data, ['Fecha', 'Grupo_Codigo', 'Estudiante_ID', 'Estado'], 'AsistenciasProfe');
+      const erroresMaestro = validarCamposRequeridos(dataMaestro.data, ['Código'], 'MaestroGrupos');
+
+      console.log('Resumen de validación:', {
+        registrosInvalidosPF: erroresPF,
+        registrosInvalidosProfe: erroresProfes,
+        gruposSinCodigo: erroresMaestro
+      });
 
       console.log('Datos recibidos:', {
         asistenciasPF: dataPF.count,
@@ -113,7 +147,9 @@ const App = () => {
       
     } catch (error) {
       console.error('Error cargando datos:', error);
-      alert(`Error al cargar datos: ${error.message}\n\nRevisa la consola del navegador (F12) para más detalles.`);
+      const mensajeError = `Error al cargar datos: ${error.message}`;
+      setErrorCarga(mensajeError);
+      alert(`${mensajeError}\n\nRevisa la consola del navegador (F12) para más detalles.`);
     }
     setLoading(false);
   }, [selectedDate]);
@@ -139,20 +175,52 @@ const App = () => {
   // Verificar si un grupo tiene clase en un día específico
   const grupoTieneClaseEnDia = (infoGrupo, diaBuscado) => {
     if (!infoGrupo) return false;
-    
+
+    // Usar el objeto original si está disponible
+    const grupoData = infoGrupo._original || infoGrupo;
+
+    // Normalizar el día buscado para comparación insensible a mayúsculas/acentos
+    const normalizarDia = (dia) => {
+      if (!dia) return '';
+      return dia.toString()
+        .toLowerCase()
+        .trim()
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, ''); // Remover acentos
+    };
+
+    const diaNormalizado = normalizarDia(diaBuscado);
+
     // Opción 1: Usar las columnas booleanas individuales (Lunes, Martes, etc.)
-    const valorDia = infoGrupo[diaBuscado];
-    if (valorDia === true || valorDia === 'TRUE' || valorDia === 'true' || valorDia === 1) {
-      return true;
+    // Buscar el campo con diferentes variaciones de nombre
+    const posiblesNombresDia = [
+      diaBuscado, // Ej: "Lunes"
+      diaBuscado.toLowerCase(), // Ej: "lunes"
+      diaBuscado.toUpperCase(), // Ej: "LUNES"
+    ];
+
+    for (const nombreDia of posiblesNombresDia) {
+      const valorDia = grupoData[nombreDia];
+      if (valorDia === true || valorDia === 'TRUE' || valorDia === 'true' ||
+          valorDia === 1 || valorDia === '1' || valorDia === 'SI' || valorDia === 'si' || valorDia === 'Sí') {
+        return true;
+      }
+      // Verificar explícitamente si es false (no undefined)
+      if (valorDia === false || valorDia === 'FALSE' || valorDia === 'false' ||
+          valorDia === 0 || valorDia === '0' || valorDia === 'NO' || valorDia === 'no') {
+        return false;
+      }
     }
-    
+
     // Opción 2: Buscar en la columna "Días" (si existe)
-    if (infoGrupo.Días || infoGrupo.Dias) {
-      const diasTexto = (infoGrupo.Días || infoGrupo.Dias).toString().toLowerCase();
-      const diaBuscadoLower = diaBuscado.toLowerCase();
-      return diasTexto.includes(diaBuscadoLower);
+    const diasTexto = grupoData.Días || grupoData.Dias || grupoData.dias || grupoData.DIAS || '';
+    if (diasTexto) {
+      const diasNormalizados = normalizarDia(diasTexto);
+      return diasNormalizados.includes(diaNormalizado);
     }
-    
+
+    // Si no hay información de días, registrar advertencia y retornar false
+    console.warn(`No se encontró información de días para el grupo. Día buscado: ${diaBuscado}`, grupoData);
     return false;
   };
 
@@ -160,10 +228,24 @@ const App = () => {
   const maestroGruposMap = useMemo(() => {
     const map = {};
     maestroGrupos.forEach(g => {
-      if (g.Código) {
-        map[g.Código] = g;
+      // Manejar múltiples posibles nombres de campo para el código
+      const codigo = g.Código || g.Codigo || g.codigo || g.CODIGO || g.Code || g.code;
+      if (codigo) {
+        // Normalizar el grupo para manejar inconsistencias en nombres de campos
+        const grupoNormalizado = {
+          codigo: codigo.toString().trim(),
+          profesor: (g.Profe || g.profe || g.Profesor || g.profesor || '').toString().trim(),
+          cancha: (g.Cancha || g.cancha || '').toString().trim(),
+          horario: (g.Hora || g.hora || g.Horario || g.horario || '').toString().trim(),
+          // Mantener referencia original para días
+          _original: g
+        };
+        map[grupoNormalizado.codigo] = grupoNormalizado;
+      } else {
+        console.warn('Grupo sin código encontrado:', g);
       }
     });
+    console.log(`Maestro de grupos indexado: ${Object.keys(map).length} grupos`);
     return map;
   }, [maestroGrupos]);
 
@@ -171,8 +253,27 @@ const App = () => {
   const clases = useMemo(() => {
     const clasesTemp = {};
 
+    // Crear un Set para búsqueda rápida O(1) de registros PF
+    const pfRecordsSet = new Set(
+      asistenciasPF.map(a => `${a.Fecha}_${a.Grupo_Codigo}_${a.Estudiante_ID}`)
+    );
+
+    // Función helper para determinar si es registro PF
+    const esPFRecord = (asistencia) => {
+      const key = `${asistencia.Fecha}_${asistencia.Grupo_Codigo}_${asistencia.Estudiante_ID}`;
+      return asistencia.Enviado_Por === 'usuario' ||
+             asistencia.Tipo_Clase || // Solo PF tiene Tipo_Clase
+             pfRecordsSet.has(key);
+    };
+
     // Agrupar por Fecha + Grupo_Codigo
     [...asistenciasPF, ...asistenciasProfes].forEach(asistencia => {
+      // Validar que la asistencia tenga los campos requeridos
+      if (!asistencia.Fecha || !asistencia.Grupo_Codigo || !asistencia.Estudiante_ID) {
+        console.warn('Registro de asistencia incompleto:', asistencia);
+        return; // Saltar registros incompletos
+      }
+
       const key = `${asistencia.Fecha}_${asistencia.Grupo_Codigo}`;
       if (!clasesTemp[key]) {
         clasesTemp[key] = {
@@ -192,8 +293,8 @@ const App = () => {
         };
       }
 
-      // Determinar si viene del PF o del Profe
-      if (asistencia.Enviado_Por === 'usuario' || asistenciasPF.includes(asistencia)) {
+      // Determinar si viene del PF o del Profe usando la función helper
+      if (esPFRecord(asistencia)) {
         clasesTemp[key].estudiantes[estudianteKey].pf = asistencia;
       } else {
         clasesTemp[key].estudiantes[estudianteKey].profe = asistencia;
@@ -203,18 +304,27 @@ const App = () => {
     // Agregar información del maestro de grupos y filtrar por día de la semana
     const diaSeleccionado = obtenerDiaSemana(selectedDate);
     const clasesDelDia = {};
+    const gruposNoEncontrados = new Set();
 
     Object.keys(clasesTemp).forEach(key => {
       const clase = clasesTemp[key];
-      const infoGrupo = maestroGruposMap[clase.grupo]; // ⚡ Búsqueda O(1) en lugar de .find()
+      // Buscar con el código exacto primero, luego intentar con trim
+      const codigoGrupo = clase.grupo?.toString().trim();
+      const infoGrupo = maestroGruposMap[codigoGrupo] || maestroGruposMap[clase.grupo]; // ⚡ Búsqueda O(1)
 
       if (infoGrupo) {
-        clase.horario = infoGrupo.Hora;
-        clase.profesor = infoGrupo.Profe;
-        clase.cancha = infoGrupo.Cancha;
+        // Usar datos normalizados
+        clase.horario = infoGrupo.horario || 'Sin horario';
+        clase.profesor = infoGrupo.profesor || 'Sin asignar';
+        clase.cancha = infoGrupo.cancha || 'N/A';
         clase.tieneClaseHoy = grupoTieneClaseEnDia(infoGrupo, diaSeleccionado);
+        clase.grupoEncontrado = true;
       } else {
-        clase.tieneClaseHoy = true; // Por defecto incluir si no se encuentra info
+        // CAMBIO IMPORTANTE: NO incluir grupos que no están en maestro_grupos
+        // Esto puede indicar un error en los datos
+        clase.tieneClaseHoy = false; // Cambio de true a false
+        clase.grupoEncontrado = false;
+        gruposNoEncontrados.add(clase.grupo);
       }
 
       // Solo incluir si el grupo tiene clase el día seleccionado
@@ -223,12 +333,47 @@ const App = () => {
       }
     });
 
+    // Advertir sobre grupos no encontrados
+    if (gruposNoEncontrados.size > 0) {
+      console.warn(`⚠️ ${gruposNoEncontrados.size} grupo(s) no encontrados en maestro_grupos:`,
+        Array.from(gruposNoEncontrados).join(', '));
+      console.warn('Estos grupos no se mostrarán. Verifica que existan en la hoja maestro_grupos.');
+    }
+
     return clasesDelDia;
   }, [asistenciasPF, asistenciasProfes, maestroGruposMap, estudiantes, selectedDate]);
+
+  // Efecto para detectar y reportar grupos no encontrados
+  useEffect(() => {
+    const gruposEnAsistencias = new Set([
+      ...asistenciasPF.map(a => a.Grupo_Codigo),
+      ...asistenciasProfes.map(a => a.Grupo_Codigo)
+    ]);
+
+    const noEncontrados = [];
+    gruposEnAsistencias.forEach(codigo => {
+      if (codigo && !maestroGruposMap[codigo] && !maestroGruposMap[codigo?.toString().trim()]) {
+        noEncontrados.push(codigo);
+      }
+    });
+
+    if (noEncontrados.length > 0) {
+      setGruposNoEncontrados(noEncontrados);
+      console.warn('Grupos no encontrados en maestro_grupos:', noEncontrados);
+    } else {
+      setGruposNoEncontrados([]);
+    }
+  }, [asistenciasPF, asistenciasProfes, maestroGruposMap]);
 
   // Detectar tipo de inconsistencia
   const detectarInconsistencia = (estudiante) => {
     const { pf, profe } = estudiante;
+
+    // Helper para obtener estado de forma segura
+    const obtenerEstado = (registro) => {
+      if (!registro || !registro.Estado) return null;
+      return registro.Estado.toString().toLowerCase().trim();
+    };
 
     // Reposición (solo en PF)
     if (pf && pf.Tipo_Clase === 'Reposicion') {
@@ -242,43 +387,62 @@ const App = () => {
 
     // El profesor no marcó asistencia = Ausente implícito
     if (pf && !profe) {
-      const estadoPF = pf.Estado.toLowerCase();
-      
-      // Si el PF dice presente pero el profesor no marcó nada = CONFLICTO
-      if (estadoPF === 'presente') {
-        return { 
-          tipo: 'conflicto', 
-          color: 'red', 
-          icono: '❌', 
-          mensaje: 'PF: Presente vs Profe: Ausente (no marcó)' 
+      const estadoPF = obtenerEstado(pf);
+
+      if (!estadoPF) {
+        return {
+          tipo: 'error_datos',
+          color: 'yellow',
+          icono: '⚠️',
+          mensaje: 'PF sin estado definido'
         };
       }
-      
+
+      // Si el PF dice presente pero el profesor no marcó nada = CONFLICTO
+      if (estadoPF === 'presente') {
+        return {
+          tipo: 'conflicto',
+          color: 'red',
+          icono: '❌',
+          mensaje: 'PF: Presente vs Profe: Ausente (no marcó)'
+        };
+      }
+
       // Si el PF dice ausente y el profesor no marcó nada = COINCIDEN
       if (estadoPF === 'ausente') {
-        return { 
-          tipo: 'coincide_ausente', 
-          color: 'gray', 
+        return {
+          tipo: 'coincide_ausente',
+          color: 'gray',
           icono: '⚪',
           mensaje: 'Ambos ausentes'
         };
       }
-      
+
       // Si el PF dice justificado y el profesor no marcó = Alerta
       if (estadoPF === 'justificado' || estadoPF === 'justificada') {
-        return { 
-          tipo: 'justificado_vs_ausente', 
-          color: 'yellow', 
-          icono: '⚠️', 
-          mensaje: 'PF: Justificado vs Profe: Ausente (no marcó)' 
+        return {
+          tipo: 'justificado_vs_ausente',
+          color: 'yellow',
+          icono: '⚠️',
+          mensaje: 'PF: Justificado vs Profe: Ausente (no marcó)'
         };
       }
     }
 
     // Comparar estados cuando ambos existen
     if (pf && profe) {
-      const estadoPF = pf.Estado.toLowerCase();
-      const estadoProfe = profe.Estado.toLowerCase();
+      const estadoPF = obtenerEstado(pf);
+      const estadoProfe = obtenerEstado(profe);
+
+      // Verificar que ambos tengan estado válido
+      if (!estadoPF || !estadoProfe) {
+        return {
+          tipo: 'error_datos',
+          color: 'yellow',
+          icono: '⚠️',
+          mensaje: `Estado inválido - PF: ${estadoPF || 'vacío'}, Profe: ${estadoProfe || 'vacío'}`
+        };
+      }
 
       if (estadoPF === estadoProfe) {
         if (estadoPF === 'presente') {
@@ -287,11 +451,11 @@ const App = () => {
           return { tipo: 'coincide_ausente', color: 'gray', icono: '⚪' };
         }
       } else {
-        return { 
-          tipo: 'conflicto', 
-          color: 'red', 
-          icono: '❌', 
-          mensaje: `PF: ${pf.Estado} vs Profe: ${profe.Estado}` 
+        return {
+          tipo: 'conflicto',
+          color: 'red',
+          icono: '❌',
+          mensaje: `PF: ${pf.Estado} vs Profe: ${profe.Estado}`
         };
       }
     }
@@ -423,10 +587,10 @@ const App = () => {
   const clasesKeys = filtrarClases(clases);
   const clasesPorHorario = agruparPorHorario(clases, clasesKeys);
 
-  // Obtener listas únicas para filtros
-  const profesores = [...new Set(maestroGrupos.map(g => g.Profe).filter(Boolean))];
-  const grupos = [...new Set(maestroGrupos.map(g => g.Código).filter(Boolean))];
-  const canchas = [...new Set(maestroGrupos.map(g => g.Cancha).filter(Boolean))];
+  // Obtener listas únicas para filtros (usando el mapa normalizado)
+  const profesores = [...new Set(Object.values(maestroGruposMap).map(g => g.profesor).filter(Boolean))].sort();
+  const grupos = [...new Set(Object.values(maestroGruposMap).map(g => g.codigo).filter(Boolean))].sort();
+  const canchas = [...new Set(Object.values(maestroGruposMap).map(g => g.cancha).filter(Boolean))].sort();
 
   // Filtrar revisiones por fecha seleccionada para el historial
   const revisionesFiltradas = revisiones.filter(rev => rev.Fecha === selectedDate);
@@ -517,6 +681,49 @@ const App = () => {
           </button>
         </div>
       </div>
+
+      {/* Alertas de errores y advertencias */}
+      {(errorCarga || gruposNoEncontrados.length > 0) && (
+        <div className="max-w-7xl mx-auto px-4 mb-4">
+          {errorCarga && (
+            <div className="bg-red-50 border-l-4 border-red-500 p-4 rounded-lg shadow-md mb-3">
+              <div className="flex items-center gap-2">
+                <AlertTriangle className="text-red-500" size={20} />
+                <h3 className="font-bold text-red-700">Error de Carga</h3>
+              </div>
+              <p className="text-red-600 mt-1">{errorCarga}</p>
+              <button
+                onClick={loadData}
+                className="mt-2 px-3 py-1 bg-red-600 text-white rounded hover:bg-red-700 text-sm"
+              >
+                Reintentar carga
+              </button>
+            </div>
+          )}
+
+          {gruposNoEncontrados.length > 0 && (
+            <div className="bg-yellow-50 border-l-4 border-yellow-500 p-4 rounded-lg shadow-md">
+              <div className="flex items-center gap-2">
+                <AlertTriangle className="text-yellow-600" size={20} />
+                <h3 className="font-bold text-yellow-700">Grupos No Encontrados en Maestro</h3>
+              </div>
+              <p className="text-yellow-700 mt-1 text-sm">
+                Los siguientes {gruposNoEncontrados.length} grupo(s) tienen asistencias registradas pero no existen en la hoja "maestro_grupos":
+              </p>
+              <div className="mt-2 flex flex-wrap gap-2">
+                {gruposNoEncontrados.map(grupo => (
+                  <span key={grupo} className="bg-yellow-100 text-yellow-800 px-2 py-1 rounded text-xs font-mono">
+                    {grupo}
+                  </span>
+                ))}
+              </div>
+              <p className="text-yellow-600 text-xs mt-2">
+                Estos grupos no se mostrarán. Verifica que estén correctamente registrados en maestro_grupos.
+              </p>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Leyenda */}
       {currentPage === 'pendientes' && (
