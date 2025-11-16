@@ -150,15 +150,17 @@ const App = () => {
       }
 
       // Verificar si hay grupos específicos para debug
-      const grupoDebug = 'V1812';
-      const pfDeGrupo = asistenciasFiltradas.filter(a => a.Grupo_Codigo === grupoDebug);
-      const profDeGrupo = asistenciasProfesFiltr.filter(a => a.Grupo_Codigo === grupoDebug);
+      const gruposDebug = ['V1623', 'V1812'];
+      gruposDebug.forEach(grupoDebug => {
+        const pfDeGrupo = asistenciasFiltradas.filter(a => a.Grupo_Codigo === grupoDebug);
+        const profDeGrupo = asistenciasProfesFiltr.filter(a => a.Grupo_Codigo === grupoDebug);
 
-      if (pfDeGrupo.length > 0 || profDeGrupo.length > 0) {
-        console.log(`🔍 DEBUG Grupo ${grupoDebug}:`);
-        console.log('  PF records:', pfDeGrupo);
-        console.log('  Prof records:', profDeGrupo);
-      }
+        if (pfDeGrupo.length > 0 || profDeGrupo.length > 0) {
+          console.log(`🔍 DEBUG Grupo ${grupoDebug}:`);
+          console.log('  PF records:', pfDeGrupo);
+          console.log('  Prof records:', profDeGrupo);
+        }
+      });
 
       setAsistenciasPF(asistenciasFiltradas);
       setAsistenciasProfes(asistenciasProfesFiltr);
