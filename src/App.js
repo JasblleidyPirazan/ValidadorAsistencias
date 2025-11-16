@@ -33,6 +33,9 @@ const App = () => {
   const [notas, setNotas] = useState('');
   const [gruposNoEncontrados, setGruposNoEncontrados] = useState([]);
   const [errorCarga, setErrorCarga] = useState(null);
+  const [mostrarTodasFechas, setMostrarTodasFechas] = useState(false);
+  const [todasAsistenciasPF, setTodasAsistenciasPF] = useState([]);
+  const [todasAsistenciasProfes, setTodasAsistenciasProfes] = useState([]);
 
   // Cargar datos desde la API
   const loadData = useCallback(async () => {
@@ -131,6 +134,10 @@ const App = () => {
         console.warn('No se pudieron cargar los estudiantes. Se mostrarán los IDs.');
       }
       setEstudiantes(estudiantesMap);
+
+      // Guardar TODOS los datos (sin filtrar por fecha)
+      setTodasAsistenciasPF(dataPF.data);
+      setTodasAsistenciasProfes(dataProfes.data);
 
       // Filtrar por fecha seleccionada
       const asistenciasFiltradas = dataPF.data.filter(a => a.Fecha === selectedDate);
@@ -277,19 +284,23 @@ const App = () => {
   const clases = useMemo(() => {
     const clasesTemp = {};
 
+    // Usar datos filtrados o todos según el toggle
+    const datosPF = mostrarTodasFechas ? todasAsistenciasPF : asistenciasPF;
+    const datosProfe = mostrarTodasFechas ? todasAsistenciasProfes : asistenciasProfes;
+
     // Crear un Map para identificar la fuente de cada registro
     // Usando WeakMap para identificar la referencia exacta del objeto
     const pfRecordsMap = new Map();
     const profRecordsMap = new Map();
 
     // Marcar cada registro PF con su referencia
-    asistenciasPF.forEach(a => {
+    datosPF.forEach(a => {
       const key = `${a.Fecha}_${a.Grupo_Codigo}_${a.Estudiante_ID}`;
       pfRecordsMap.set(a, key); // Guardar referencia del objeto
     });
 
     // Marcar cada registro Prof con su referencia
-    asistenciasProfes.forEach(a => {
+    datosProfe.forEach(a => {
       const key = `${a.Fecha}_${a.Grupo_Codigo}_${a.Estudiante_ID}`;
       profRecordsMap.set(a, key); // Guardar referencia del objeto
     });
@@ -314,7 +325,7 @@ const App = () => {
     };
 
     // Agrupar por Fecha + Grupo_Codigo
-    [...asistenciasPF, ...asistenciasProfes].forEach(asistencia => {
+    [...datosPF, ...datosProfe].forEach(asistencia => {
       // Validar que la asistencia tenga los campos requeridos
       if (!asistencia.Fecha || !asistencia.Grupo_Codigo || !asistencia.Estudiante_ID) {
         console.warn('Registro de asistencia incompleto:', asistencia);
@@ -382,7 +393,14 @@ const App = () => {
         clase.horario = infoGrupo.horario || 'Sin horario';
         clase.profesor = infoGrupo.profesor || 'Sin asignar';
         clase.cancha = infoGrupo.cancha || 'N/A';
-        clase.tieneClaseHoy = grupoTieneClaseEnDia(infoGrupo, diaSeleccionado);
+
+        // Si mostramos todas las fechas, verificar el día de la semana de CADA clase
+        if (mostrarTodasFechas) {
+          const diaClase = obtenerDiaSemana(clase.fecha);
+          clase.tieneClaseHoy = grupoTieneClaseEnDia(infoGrupo, diaClase);
+        } else {
+          clase.tieneClaseHoy = grupoTieneClaseEnDia(infoGrupo, diaSeleccionado);
+        }
         clase.grupoEncontrado = true;
       } else {
         // CAMBIO IMPORTANTE: NO incluir grupos que no están en maestro_grupos
@@ -392,7 +410,7 @@ const App = () => {
         gruposNoEncontrados.add(clase.grupo);
       }
 
-      // Solo incluir si el grupo tiene clase el día seleccionado
+      // Solo incluir si el grupo tiene clase el día seleccionado (o su día correspondiente)
       if (clase.tieneClaseHoy) {
         clasesDelDia[key] = clase;
       }
@@ -406,7 +424,7 @@ const App = () => {
     }
 
     return clasesDelDia;
-  }, [asistenciasPF, asistenciasProfes, maestroGruposMap, estudiantes, selectedDate]);
+  }, [asistenciasPF, asistenciasProfes, todasAsistenciasPF, todasAsistenciasProfes, maestroGruposMap, estudiantes, selectedDate, mostrarTodasFechas]);
 
   // Efecto para detectar y reportar grupos no encontrados
   useEffect(() => {
@@ -568,6 +586,20 @@ const App = () => {
     return grupos;
   };
 
+  // Agrupar clases por fecha (para vista de todas las fechas)
+  const agruparPorFecha = (clases, keys) => {
+    const grupos = {};
+    keys.forEach(key => {
+      const clase = clases[key];
+      const fecha = clase.fecha;
+      if (!grupos[fecha]) {
+        grupos[fecha] = [];
+      }
+      grupos[fecha].push({ key, ...clase });
+    });
+    return grupos;
+  };
+
   // Abrir modal de revisión
   const abrirModalRevision = (clase) => {
     setModalData(clase);
@@ -651,6 +683,7 @@ const App = () => {
 
   const clasesKeys = filtrarClases(clases);
   const clasesPorHorario = agruparPorHorario(clases, clasesKeys);
+  const clasesPorFecha = agruparPorFecha(clases, clasesKeys);
 
   // Obtener listas únicas para filtros (usando el mapa normalizado)
   const profesores = [...new Set(Object.values(maestroGruposMap).map(g => g.profesor).filter(Boolean))].sort();
@@ -727,19 +760,34 @@ const App = () => {
           </select>
 
           {currentPage === 'pendientes' && (
-            <label className="flex items-center gap-2 cursor-pointer">
-              <input
-                type="checkbox"
-                checked={filters.soloInconsistencias}
-                onChange={(e) => setFilters({ ...filters, soloInconsistencias: e.target.checked })}
-                className="w-4 h-4"
-              />
-              <span>Solo inconsistencias</span>
-            </label>
+            <>
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={filters.soloInconsistencias}
+                  onChange={(e) => setFilters({ ...filters, soloInconsistencias: e.target.checked })}
+                  className="w-4 h-4"
+                />
+                <span>Solo inconsistencias</span>
+              </label>
+
+              <label className="flex items-center gap-2 cursor-pointer bg-purple-50 px-3 py-2 rounded border border-purple-200">
+                <input
+                  type="checkbox"
+                  checked={mostrarTodasFechas}
+                  onChange={(e) => setMostrarTodasFechas(e.target.checked)}
+                  className="w-4 h-4 text-purple-600"
+                />
+                <span className="font-medium text-purple-700">Ver todas las fechas</span>
+              </label>
+            </>
           )}
 
           <button
-            onClick={() => setFilters({ profesor: '', grupo: '', cancha: '', soloInconsistencias: false })}
+            onClick={() => {
+              setFilters({ profesor: '', grupo: '', cancha: '', soloInconsistencias: false });
+              setMostrarTodasFechas(false);
+            }}
             className="ml-auto px-4 py-2 bg-gray-200 rounded hover:bg-gray-300"
           >
             Limpiar filtros
@@ -816,92 +864,187 @@ const App = () => {
         ) : currentPage === 'pendientes' ? (
           <>
             <div className="mb-4">
-              <h2 className="text-2xl font-bold">Clases pendientes del {selectedDate}</h2>
-              <p className="text-gray-600 mt-1">
-                {obtenerDiaSemana(selectedDate)} - Mostrando solo grupos de este día
-              </p>
+              {mostrarTodasFechas ? (
+                <>
+                  <h2 className="text-2xl font-bold">Todas las clases pendientes</h2>
+                  <p className="text-gray-600 mt-1">
+                    Mostrando {clasesKeys.length} clase(s) de todas las fechas disponibles
+                  </p>
+                </>
+              ) : (
+                <>
+                  <h2 className="text-2xl font-bold">Clases pendientes del {selectedDate}</h2>
+                  <p className="text-gray-600 mt-1">
+                    {obtenerDiaSemana(selectedDate)} - Mostrando solo grupos de este día
+                  </p>
+                </>
+              )}
             </div>
-            
-            {Object.keys(clasesPorHorario).sort().map(horario => (
-              <div key={horario} className="mb-6">
-                <h3 className="text-xl font-semibold bg-gray-100 p-3 rounded-t-lg border-b-2 border-blue-500">
-                  {horario}
-                </h3>
-                
-                <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-                  {clasesPorHorario[horario].map(clase => {
-                    const estudiantesArray = Object.values(clase.estudiantes);
-                    const tieneInconsistencia = estudiantesArray.some(est => {
-                      const inc = detectarInconsistencia(est);
-                      return inc.tipo === 'conflicto' || inc.tipo === 'falta_pf' || inc.tipo === 'falta_profe';
-                    });
 
-                    return (
-                      <div
-                        key={clase.key}
-                        className={`bg-white rounded-lg shadow-md p-4 border-l-4 ${
-                          tieneInconsistencia ? 'border-red-500' : 'border-green-500'
-                        }`}
-                      >
-                        <div className="flex justify-between items-start mb-3">
-                          <div className="w-full">
-                            <h4 className="font-bold text-lg mb-1">{clase.grupo}</h4>
-                            <p className="text-sm text-gray-700 font-medium">
-                              👤 {clase.profesor || 'Profesor no asignado'}
-                            </p>
-                            <p className="text-xs text-gray-500 mt-1">📍 Cancha {clase.cancha || 'N/A'}</p>
-                          </div>
-                          {tieneInconsistencia && (
-                            <AlertTriangle className="text-red-500 flex-shrink-0" size={24} />
-                          )}
-                        </div>
+            {mostrarTodasFechas ? (
+              // Vista agrupada por fecha
+              Object.keys(clasesPorFecha).sort().reverse().map(fecha => (
+                <div key={fecha} className="mb-6">
+                  <h3 className="text-xl font-semibold bg-purple-100 p-3 rounded-t-lg border-b-2 border-purple-500">
+                    📅 {fecha} - {obtenerDiaSemana(fecha)}
+                  </h3>
 
-                        <div className="space-y-2 mb-3">
-                          {estudiantesArray.map(estudiante => {
-                            const inc = detectarInconsistencia(estudiante);
-                            return (
-                              <div
-                                key={estudiante.id}
-                                className={`p-2 rounded text-sm ${
-                                  inc.color === 'green' ? 'bg-green-50' :
-                                  inc.color === 'red' ? 'bg-red-50' :
-                                  inc.color === 'yellow' ? 'bg-yellow-50' :
-                                  inc.color === 'blue' ? 'bg-blue-50' :
-                                  'bg-gray-50'
-                                }`}
-                              >
-                                <div className="flex justify-between items-center">
-                                  <span className="font-medium">{inc.icono} {estudiante.nombre}</span>
-                                  {inc.mensaje && (
-                                    <span className="text-xs text-gray-600">{inc.mensaje}</span>
-                                  )}
-                                </div>
-                              </div>
-                            );
-                          })}
-                        </div>
+                  <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3 mt-2">
+                    {clasesPorFecha[fecha].map(clase => {
+                      const estudiantesArray = Object.values(clase.estudiantes);
+                      const tieneInconsistencia = estudiantesArray.some(est => {
+                        const inc = detectarInconsistencia(est);
+                        return inc.tipo === 'conflicto' || inc.tipo === 'falta_pf' || inc.tipo === 'falta_profe';
+                      });
 
-                        <button
-                          onClick={() => abrirModalRevision(clase)}
-                          className="w-full py-2 bg-blue-600 text-white rounded hover:bg-blue-700 transition"
+                      return (
+                        <div
+                          key={clase.key}
+                          className={`bg-white rounded-lg shadow-md p-4 border-l-4 ${
+                            tieneInconsistencia ? 'border-red-500' : 'border-green-500'
+                          }`}
                         >
-                          Revisar clase
-                        </button>
-                      </div>
-                    );
-                  })}
+                          <div className="flex justify-between items-start mb-3">
+                            <div className="w-full">
+                              <h4 className="font-bold text-lg mb-1">{clase.grupo}</h4>
+                              <p className="text-sm text-gray-700 font-medium">
+                                👤 {clase.profesor || 'Profesor no asignado'}
+                              </p>
+                              <p className="text-xs text-gray-500 mt-1">
+                                📍 Cancha {clase.cancha || 'N/A'} | ⏰ {clase.horario}
+                              </p>
+                            </div>
+                            {tieneInconsistencia && (
+                              <AlertTriangle className="text-red-500 flex-shrink-0" size={24} />
+                            )}
+                          </div>
+
+                          <div className="space-y-2 mb-3">
+                            {estudiantesArray.map(estudiante => {
+                              const inc = detectarInconsistencia(estudiante);
+                              return (
+                                <div
+                                  key={estudiante.id}
+                                  className={`p-2 rounded text-sm ${
+                                    inc.color === 'green' ? 'bg-green-50' :
+                                    inc.color === 'red' ? 'bg-red-50' :
+                                    inc.color === 'yellow' ? 'bg-yellow-50' :
+                                    inc.color === 'blue' ? 'bg-blue-50' :
+                                    'bg-gray-50'
+                                  }`}
+                                >
+                                  <div className="flex justify-between items-center">
+                                    <span className="font-medium">{inc.icono} {estudiante.nombre}</span>
+                                    {inc.mensaje && (
+                                      <span className="text-xs text-gray-600">{inc.mensaje}</span>
+                                    )}
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          </div>
+
+                          <button
+                            onClick={() => abrirModalRevision(clase)}
+                            className="w-full py-2 bg-blue-600 text-white rounded hover:bg-blue-700 transition"
+                          >
+                            Revisar clase
+                          </button>
+                        </div>
+                      );
+                    })}
+                  </div>
                 </div>
-              </div>
-            ))}
+              ))
+            ) : (
+              // Vista agrupada por horario (original)
+              Object.keys(clasesPorHorario).sort().map(horario => (
+                <div key={horario} className="mb-6">
+                  <h3 className="text-xl font-semibold bg-gray-100 p-3 rounded-t-lg border-b-2 border-blue-500">
+                    {horario}
+                  </h3>
+
+                  <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+                    {clasesPorHorario[horario].map(clase => {
+                      const estudiantesArray = Object.values(clase.estudiantes);
+                      const tieneInconsistencia = estudiantesArray.some(est => {
+                        const inc = detectarInconsistencia(est);
+                        return inc.tipo === 'conflicto' || inc.tipo === 'falta_pf' || inc.tipo === 'falta_profe';
+                      });
+
+                      return (
+                        <div
+                          key={clase.key}
+                          className={`bg-white rounded-lg shadow-md p-4 border-l-4 ${
+                            tieneInconsistencia ? 'border-red-500' : 'border-green-500'
+                          }`}
+                        >
+                          <div className="flex justify-between items-start mb-3">
+                            <div className="w-full">
+                              <h4 className="font-bold text-lg mb-1">{clase.grupo}</h4>
+                              <p className="text-sm text-gray-700 font-medium">
+                                👤 {clase.profesor || 'Profesor no asignado'}
+                              </p>
+                              <p className="text-xs text-gray-500 mt-1">📍 Cancha {clase.cancha || 'N/A'}</p>
+                            </div>
+                            {tieneInconsistencia && (
+                              <AlertTriangle className="text-red-500 flex-shrink-0" size={24} />
+                            )}
+                          </div>
+
+                          <div className="space-y-2 mb-3">
+                            {estudiantesArray.map(estudiante => {
+                              const inc = detectarInconsistencia(estudiante);
+                              return (
+                                <div
+                                  key={estudiante.id}
+                                  className={`p-2 rounded text-sm ${
+                                    inc.color === 'green' ? 'bg-green-50' :
+                                    inc.color === 'red' ? 'bg-red-50' :
+                                    inc.color === 'yellow' ? 'bg-yellow-50' :
+                                    inc.color === 'blue' ? 'bg-blue-50' :
+                                    'bg-gray-50'
+                                  }`}
+                                >
+                                  <div className="flex justify-between items-center">
+                                    <span className="font-medium">{inc.icono} {estudiante.nombre}</span>
+                                    {inc.mensaje && (
+                                      <span className="text-xs text-gray-600">{inc.mensaje}</span>
+                                    )}
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          </div>
+
+                          <button
+                            onClick={() => abrirModalRevision(clase)}
+                            className="w-full py-2 bg-blue-600 text-white rounded hover:bg-blue-700 transition"
+                          >
+                            Revisar clase
+                          </button>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              ))
+            )}
 
             {clasesKeys.length === 0 && (
               <div className="text-center py-12 bg-white rounded-lg shadow-md">
                 <CheckCircle className="mx-auto mb-4 text-green-500" size={64} />
                 <p className="text-xl font-semibold text-gray-700 mb-2">¡Todo al día!</p>
-                <p className="text-gray-500">No hay clases pendientes de revisión para {obtenerDiaSemana(selectedDate)}, {selectedDate}</p>
+                <p className="text-gray-500">
+                  {mostrarTodasFechas
+                    ? 'No hay clases pendientes de revisión en ninguna fecha'
+                    : `No hay clases pendientes de revisión para ${obtenerDiaSemana(selectedDate)}, ${selectedDate}`}
+                </p>
                 <p className="text-sm text-gray-400 mt-2">
-                  {filters.profesor || filters.grupo || filters.cancha || filters.soloInconsistencias 
-                    ? 'Intenta limpiar los filtros para ver más resultados' 
+                  {filters.profesor || filters.grupo || filters.cancha || filters.soloInconsistencias
+                    ? 'Intenta limpiar los filtros para ver más resultados'
+                    : mostrarTodasFechas
+                    ? 'Todas las clases han sido revisadas o no hay registros'
                     : 'Las clases se filtran automáticamente por día de la semana'}
                 </p>
               </div>
@@ -969,6 +1112,9 @@ const App = () => {
                   <h3 className="text-2xl font-bold">{modalData.grupo}</h3>
                   <p className="text-gray-600">{modalData.profesor} - Cancha {modalData.cancha}</p>
                   <p className="text-sm text-gray-500">{modalData.horario}</p>
+                  <p className="text-sm text-purple-600 font-medium">
+                    📅 {modalData.fecha} - {obtenerDiaSemana(modalData.fecha)}
+                  </p>
                 </div>
                 <button onClick={() => setShowModal(false)} className="text-gray-500 hover:text-gray-700">
                   <X size={24} />
