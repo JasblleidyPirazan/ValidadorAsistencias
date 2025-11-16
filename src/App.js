@@ -277,32 +277,39 @@ const App = () => {
   const clases = useMemo(() => {
     const clasesTemp = {};
 
-    // Crear un Set para búsqueda rápida O(1) de registros PF
-    const pfRecordsSet = new Set(
-      asistenciasPF.map(a => `${a.Fecha}_${a.Grupo_Codigo}_${a.Estudiante_ID}`)
-    );
+    // Crear un Map para identificar la fuente de cada registro
+    // Usando WeakMap para identificar la referencia exacta del objeto
+    const pfRecordsMap = new Map();
+    const profRecordsMap = new Map();
 
-    // Crear un Set para registros de profesores
-    const profRecordsSet = new Set(
-      asistenciasProfes.map(a => `${a.Fecha}_${a.Grupo_Codigo}_${a.Estudiante_ID}`)
-    );
+    // Marcar cada registro PF con su referencia
+    asistenciasPF.forEach(a => {
+      const key = `${a.Fecha}_${a.Grupo_Codigo}_${a.Estudiante_ID}`;
+      pfRecordsMap.set(a, key); // Guardar referencia del objeto
+    });
+
+    // Marcar cada registro Prof con su referencia
+    asistenciasProfes.forEach(a => {
+      const key = `${a.Fecha}_${a.Grupo_Codigo}_${a.Estudiante_ID}`;
+      profRecordsMap.set(a, key); // Guardar referencia del objeto
+    });
 
     // Función helper para determinar si es registro PF
+    // IMPORTANTE: Verificar la referencia del objeto, no solo la clave
     const esPFRecord = (asistencia) => {
-      const key = `${asistencia.Fecha}_${asistencia.Grupo_Codigo}_${asistencia.Estudiante_ID}`;
-
-      // Si está en el Set de PF, es PF
-      if (pfRecordsSet.has(key)) {
+      // Verificar si el objeto específico está en el Map de PF
+      if (pfRecordsMap.has(asistencia)) {
         return true;
       }
 
-      // Si está en el Set de profesores, NO es PF
-      if (profRecordsSet.has(key)) {
+      // Verificar si el objeto específico está en el Map de Prof
+      if (profRecordsMap.has(asistencia)) {
         return false;
       }
 
       // Fallback: verificar Enviado_Por
       // 'usuario' = PF, 'app_script' = Profesor
+      console.warn('Registro sin fuente identificada:', asistencia);
       return asistencia.Enviado_Por === 'usuario';
     };
 
@@ -338,6 +345,24 @@ const App = () => {
         clasesTemp[key].estudiantes[estudianteKey].pf = asistencia;
       } else {
         clasesTemp[key].estudiantes[estudianteKey].profe = asistencia;
+      }
+    });
+
+    // DEBUG: Verificar asignación correcta para grupos específicos
+    const gruposDebugComparacion = ['V1623', 'V1812'];
+    gruposDebugComparacion.forEach(grupoDebug => {
+      const claseKey = Object.keys(clasesTemp).find(k => k.includes(grupoDebug));
+      if (claseKey && clasesTemp[claseKey]) {
+        console.log(`🔬 COMPARACIÓN Grupo ${grupoDebug}:`);
+        Object.values(clasesTemp[claseKey].estudiantes).forEach(est => {
+          console.log(`  Estudiante ${est.id}:`, {
+            nombre: est.nombre,
+            tienePF: est.pf !== null,
+            tieneProfe: est.profe !== null,
+            estadoPF: est.pf?.Estado || 'N/A',
+            estadoProfe: est.profe?.Estado || 'N/A'
+          });
+        });
       }
     });
 
