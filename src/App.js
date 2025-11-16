@@ -42,13 +42,16 @@ const App = () => {
     try {
       console.log('Cargando datos para fecha:', selectedDate);
 
-      // Hacer peticiones en paralelo (ahora incluye revisiones)
+      // Agregar timestamp para evitar caché
+      const cacheBuster = `&_t=${Date.now()}`;
+
+      // Hacer peticiones en paralelo con cache busting
       const [resPF, resProfes, resMaestro, resEstudiantes, resRevisiones] = await Promise.all([
-        fetch(API_CONFIG.ASISTENCIAS_PF),
-        fetch(API_CONFIG.ASISTENCIAS_PROFES),
-        fetch(API_CONFIG.MAESTRO_GRUPOS),
-        fetch(API_CONFIG.ESTUDIANTES),
-        fetch(API_CONFIG.REVISIONES_GET)
+        fetch(API_CONFIG.ASISTENCIAS_PF + cacheBuster, { cache: 'no-store' }),
+        fetch(API_CONFIG.ASISTENCIAS_PROFES + cacheBuster, { cache: 'no-store' }),
+        fetch(API_CONFIG.MAESTRO_GRUPOS + cacheBuster, { cache: 'no-store' }),
+        fetch(API_CONFIG.ESTUDIANTES + cacheBuster, { cache: 'no-store' }),
+        fetch(API_CONFIG.REVISIONES_GET + cacheBuster, { cache: 'no-store' })
       ]);
 
       const dataPF = await resPF.json();
@@ -137,6 +140,25 @@ const App = () => {
         asistenciasPF: asistenciasFiltradas.length,
         asistenciasProfes: asistenciasProfesFiltr.length
       });
+
+      // DEBUG: Mostrar ejemplos de registros para verificar la fuente
+      if (asistenciasFiltradas.length > 0) {
+        console.log('📋 Ejemplo registro PF:', asistenciasFiltradas[0]);
+      }
+      if (asistenciasProfesFiltr.length > 0) {
+        console.log('👨‍🏫 Ejemplo registro Profesor:', asistenciasProfesFiltr[0]);
+      }
+
+      // Verificar si hay grupos específicos para debug
+      const grupoDebug = 'V1812';
+      const pfDeGrupo = asistenciasFiltradas.filter(a => a.Grupo_Codigo === grupoDebug);
+      const profDeGrupo = asistenciasProfesFiltr.filter(a => a.Grupo_Codigo === grupoDebug);
+
+      if (pfDeGrupo.length > 0 || profDeGrupo.length > 0) {
+        console.log(`🔍 DEBUG Grupo ${grupoDebug}:`);
+        console.log('  PF records:', pfDeGrupo);
+        console.log('  Prof records:', profDeGrupo);
+      }
 
       setAsistenciasPF(asistenciasFiltradas);
       setAsistenciasProfes(asistenciasProfesFiltr);
