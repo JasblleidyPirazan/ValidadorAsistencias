@@ -258,12 +258,28 @@ const App = () => {
       asistenciasPF.map(a => `${a.Fecha}_${a.Grupo_Codigo}_${a.Estudiante_ID}`)
     );
 
+    // Crear un Set para registros de profesores
+    const profRecordsSet = new Set(
+      asistenciasProfes.map(a => `${a.Fecha}_${a.Grupo_Codigo}_${a.Estudiante_ID}`)
+    );
+
     // Función helper para determinar si es registro PF
     const esPFRecord = (asistencia) => {
       const key = `${asistencia.Fecha}_${asistencia.Grupo_Codigo}_${asistencia.Estudiante_ID}`;
-      return asistencia.Enviado_Por === 'usuario' ||
-             asistencia.Tipo_Clase || // Solo PF tiene Tipo_Clase
-             pfRecordsSet.has(key);
+
+      // Si está en el Set de PF, es PF
+      if (pfRecordsSet.has(key)) {
+        return true;
+      }
+
+      // Si está en el Set de profesores, NO es PF
+      if (profRecordsSet.has(key)) {
+        return false;
+      }
+
+      // Fallback: verificar Enviado_Por
+      // 'usuario' = PF, 'app_script' = Profesor
+      return asistencia.Enviado_Por === 'usuario';
     };
 
     // Agrupar por Fecha + Grupo_Codigo
