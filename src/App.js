@@ -409,7 +409,7 @@ const App = () => {
       });
 
       console.log('Clase cancelada por lluvia:', revision);
-      
+
       // Actualizar estado local inmediatamente
       setRevisiones([...revisiones, revision]);
       setShowModal(false);
@@ -417,6 +417,89 @@ const App = () => {
     } catch (error) {
       console.error('Error cancelando clase:', error);
       alert('Error al guardar la revisión. Revisa la consola.');
+    }
+  };
+
+  // Verificar si una clase tiene plena coincidencia
+  const tieneCoincidenciaPlena = (clase) => {
+    const estudiantesArray = Object.values(clase.estudiantes);
+
+    // Verificar que todos los estudiantes tengan coincidencia (presente o ausente)
+    return estudiantesArray.every(estudiante => {
+      const inc = detectarInconsistencia(estudiante);
+      return inc.tipo === 'coincide' || inc.tipo === 'coincide_ausente';
+    });
+  };
+
+  // Aprobar masivamente clases con plena coincidencia
+  const aprobarClasesMasivo = async () => {
+    // Obtener las clases filtradas pendientes
+    const clasesPendientes = clasesKeys.map(key => ({
+      key,
+      ...clases[key]
+    }));
+
+    // Filtrar solo las que tienen plena coincidencia
+    const clasesCoincidentes = clasesPendientes.filter(clase =>
+      tieneCoincidenciaPlena(clase)
+    );
+
+    if (clasesCoincidentes.length === 0) {
+      alert('No hay clases con plena coincidencia para aprobar.');
+      return;
+    }
+
+    const confirmacion = window.confirm(
+      `¿Deseas aprobar ${clasesCoincidentes.length} clase(s) con plena coincidencia?\n\n` +
+      clasesCoincidentes.map(c => `- ${c.grupo} (${c.horario})`).join('\n')
+    );
+
+    if (!confirmacion) return;
+
+    setLoading(true);
+    const nuevasRevisiones = [];
+
+    try {
+      // Crear revisiones para cada clase
+      for (const clase of clasesCoincidentes) {
+        const revision = {
+          ID_Revision: `REV_${Date.now()}_${clase.grupo}`,
+          Fecha: clase.fecha,
+          Grupo_Codigo: clase.grupo,
+          profesor: clase.profesor || 'Sin asignar',
+          Estado_Revision: 'Aprobado',
+          Notas: 'Aprobado automáticamente - Plena coincidencia',
+          Revisado_Por: 'Coordinador (Masivo)',
+          Timestamp: new Date().toISOString()
+        };
+
+        await fetch(API_CONFIG.REVISIONES, {
+          method: 'POST',
+          mode: 'no-cors',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify(revision)
+        });
+
+        nuevasRevisiones.push(revision);
+        console.log('Clase aprobada masivamente:', revision);
+
+        // Pequeña pausa para evitar saturar la API
+        await new Promise(resolve => setTimeout(resolve, 200));
+      }
+
+      // Actualizar estado local
+      setRevisiones([...revisiones, ...nuevasRevisiones]);
+      setLoading(false);
+      alert(
+        `✅ ${clasesCoincidentes.length} clase(s) aprobada(s) exitosamente!\n\n` +
+        'Las clases ya no aparecerán en Pendientes.'
+      );
+    } catch (error) {
+      setLoading(false);
+      console.error('Error en aprobación masiva:', error);
+      alert('Error al aprobar algunas clases. Revisa la consola.');
     }
   };
 
@@ -515,6 +598,16 @@ const App = () => {
           >
             Limpiar filtros
           </button>
+
+          {currentPage === 'pendientes' && (
+            <button
+              onClick={aprobarClasesMasivo}
+              disabled={loading}
+              className="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700 transition font-medium disabled:bg-gray-400 disabled:cursor-not-allowed"
+            >
+              ✅ Aprobar clases con coincidencia total
+            </button>
+          )}
         </div>
       </div>
 
