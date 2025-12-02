@@ -26,7 +26,8 @@ const App = () => {
     profesor: '',
     grupo: '',
     cancha: '',
-    soloInconsistencias: false
+    soloInconsistencias: false,
+    todasLasFechas: false
   });
   const [showModal, setShowModal] = useState(false);
   const [modalData, setModalData] = useState(null);
@@ -36,7 +37,7 @@ const App = () => {
   const loadData = useCallback(async () => {
     setLoading(true);
     try {
-      console.log('Cargando datos para fecha:', selectedDate);
+      console.log('Cargando datos de todas las fechas...');
       
       // Hacer peticiones en paralelo (ahora incluye revisiones)
       const [resPF, resProfes, resMaestro, resEstudiantes, resRevisiones] = await Promise.all([
@@ -95,17 +96,14 @@ const App = () => {
       }
       setEstudiantes(estudiantesMap);
 
-      // Filtrar por fecha seleccionada
-      const asistenciasFiltradas = dataPF.data.filter(a => a.Fecha === selectedDate);
-      const asistenciasProfesFiltr = dataProfes.data.filter(a => a.Fecha === selectedDate);
-
-      console.log('Datos filtrados por fecha:', {
-        asistenciasPF: asistenciasFiltradas.length,
-        asistenciasProfes: asistenciasProfesFiltr.length
+      // Guardar todas las asistencias sin filtrar (el filtro se aplica después según todasLasFechas)
+      console.log('Datos cargados (todas las fechas):', {
+        asistenciasPF: dataPF.data.length,
+        asistenciasProfes: dataProfes.data.length
       });
 
-      setAsistenciasPF(asistenciasFiltradas);
-      setAsistenciasProfes(asistenciasProfesFiltr);
+      setAsistenciasPF(dataPF.data);
+      setAsistenciasProfes(dataProfes.data);
       setMaestroGrupos(dataMaestro.data);
       
       // Cargar todas las revisiones (no solo de la fecha seleccionada)
@@ -116,7 +114,7 @@ const App = () => {
       alert(`Error al cargar datos: ${error.message}\n\nRevisa la consola del navegador (F12) para más detalles.`);
     }
     setLoading(false);
-  }, [selectedDate]);
+  }, []); // Sin dependencias - solo carga una vez
 
   useEffect(() => {
     loadData();
@@ -171,8 +169,17 @@ const App = () => {
   const clases = useMemo(() => {
     const clasesTemp = {};
 
+    // Filtrar asistencias por fecha si NO está activo "todasLasFechas"
+    const asistenciasPFFiltered = filters.todasLasFechas
+      ? asistenciasPF
+      : asistenciasPF.filter(a => a.Fecha === selectedDate);
+
+    const asistenciasProfesFiltered = filters.todasLasFechas
+      ? asistenciasProfes
+      : asistenciasProfes.filter(a => a.Fecha === selectedDate);
+
     // Agrupar por Fecha + Grupo_Codigo
-    [...asistenciasPF, ...asistenciasProfes].forEach(asistencia => {
+    [...asistenciasPFFiltered, ...asistenciasProfesFiltered].forEach(asistencia => {
       const key = `${asistencia.Fecha}_${asistencia.Grupo_Codigo}`;
       if (!clasesTemp[key]) {
         clasesTemp[key] = {
@@ -201,30 +208,32 @@ const App = () => {
     });
 
     // Agregar información del maestro de grupos y filtrar por día de la semana
-    const diaSeleccionado = obtenerDiaSemana(selectedDate);
     const clasesDelDia = {};
 
     Object.keys(clasesTemp).forEach(key => {
       const clase = clasesTemp[key];
       const infoGrupo = maestroGruposMap[clase.grupo]; // ⚡ Búsqueda O(1) en lugar de .find()
 
+      // Obtener el día de la semana para la fecha de esta clase
+      const diaClase = obtenerDiaSemana(clase.fecha);
+
       if (infoGrupo) {
         clase.horario = infoGrupo.Hora;
         clase.profesor = infoGrupo.Profe;
         clase.cancha = infoGrupo.Cancha;
-        clase.tieneClaseHoy = grupoTieneClaseEnDia(infoGrupo, diaSeleccionado);
+        clase.tieneClaseHoy = grupoTieneClaseEnDia(infoGrupo, diaClase);
       } else {
         clase.tieneClaseHoy = true; // Por defecto incluir si no se encuentra info
       }
 
-      // Solo incluir si el grupo tiene clase el día seleccionado
+      // Solo incluir si el grupo tiene clase ese día de la semana
       if (clase.tieneClaseHoy) {
         clasesDelDia[key] = clase;
       }
     });
 
     return clasesDelDia;
-  }, [asistenciasPF, asistenciasProfes, maestroGruposMap, estudiantes, selectedDate]);
+  }, [asistenciasPF, asistenciasProfes, maestroGruposMap, estudiantes, selectedDate, filters.todasLasFechas]);
 
   // Detectar tipo de inconsistencia
   const detectarInconsistencia = (estudiante) => {
@@ -581,19 +590,31 @@ const App = () => {
           </select>
 
           {currentPage === 'pendientes' && (
-            <label className="flex items-center gap-2 cursor-pointer">
-              <input
-                type="checkbox"
-                checked={filters.soloInconsistencias}
-                onChange={(e) => setFilters({ ...filters, soloInconsistencias: e.target.checked })}
-                className="w-4 h-4"
-              />
-              <span>Solo inconsistencias</span>
-            </label>
+            <>
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={filters.soloInconsistencias}
+                  onChange={(e) => setFilters({ ...filters, soloInconsistencias: e.target.checked })}
+                  className="w-4 h-4"
+                />
+                <span>Solo inconsistencias</span>
+              </label>
+
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={filters.todasLasFechas}
+                  onChange={(e) => setFilters({ ...filters, todasLasFechas: e.target.checked })}
+                  className="w-4 h-4"
+                />
+                <span className="font-medium text-blue-600">📅 Todas las fechas</span>
+              </label>
+            </>
           )}
 
           <button
-            onClick={() => setFilters({ profesor: '', grupo: '', cancha: '', soloInconsistencias: false })}
+            onClick={() => setFilters({ profesor: '', grupo: '', cancha: '', soloInconsistencias: false, todasLasFechas: false })}
             className="ml-auto px-4 py-2 bg-gray-200 rounded hover:bg-gray-300"
           >
             Limpiar filtros
@@ -637,9 +658,15 @@ const App = () => {
         ) : currentPage === 'pendientes' ? (
           <>
             <div className="mb-4">
-              <h2 className="text-2xl font-bold">Clases pendientes del {selectedDate}</h2>
+              <h2 className="text-2xl font-bold">
+                {filters.todasLasFechas
+                  ? 'Clases pendientes - Todas las fechas'
+                  : `Clases pendientes del ${selectedDate}`}
+              </h2>
               <p className="text-gray-600 mt-1">
-                {obtenerDiaSemana(selectedDate)} - Mostrando solo grupos de este día
+                {filters.todasLasFechas
+                  ? 'Mostrando clases de todas las fechas pendientes de revisión'
+                  : `${obtenerDiaSemana(selectedDate)} - Mostrando solo grupos de este día`}
               </p>
             </div>
             
@@ -667,6 +694,11 @@ const App = () => {
                         <div className="flex justify-between items-start mb-3">
                           <div className="w-full">
                             <h4 className="font-bold text-lg mb-1">{clase.grupo}</h4>
+                            {filters.todasLasFechas && (
+                              <p className="text-sm text-blue-600 font-semibold">
+                                📅 {clase.fecha} ({obtenerDiaSemana(clase.fecha)})
+                              </p>
+                            )}
                             <p className="text-sm text-gray-700 font-medium">
                               👤 {clase.profesor || 'Profesor no asignado'}
                             </p>
@@ -719,10 +751,14 @@ const App = () => {
               <div className="text-center py-12 bg-white rounded-lg shadow-md">
                 <CheckCircle className="mx-auto mb-4 text-green-500" size={64} />
                 <p className="text-xl font-semibold text-gray-700 mb-2">¡Todo al día!</p>
-                <p className="text-gray-500">No hay clases pendientes de revisión para {obtenerDiaSemana(selectedDate)}, {selectedDate}</p>
+                <p className="text-gray-500">
+                  {filters.todasLasFechas
+                    ? 'No hay clases pendientes de revisión en ninguna fecha'
+                    : `No hay clases pendientes de revisión para ${obtenerDiaSemana(selectedDate)}, ${selectedDate}`}
+                </p>
                 <p className="text-sm text-gray-400 mt-2">
-                  {filters.profesor || filters.grupo || filters.cancha || filters.soloInconsistencias 
-                    ? 'Intenta limpiar los filtros para ver más resultados' 
+                  {filters.profesor || filters.grupo || filters.cancha || filters.soloInconsistencias || filters.todasLasFechas
+                    ? 'Intenta limpiar los filtros para ver más resultados'
                     : 'Las clases se filtran automáticamente por día de la semana'}
                 </p>
               </div>
