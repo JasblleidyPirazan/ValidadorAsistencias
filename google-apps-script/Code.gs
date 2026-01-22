@@ -50,33 +50,46 @@ const CONFIG = {
 function doGet(e) {
   const sheet = e.parameter.sheet;
 
-  let data;
+  let result;
 
   switch(sheet) {
     case 'asistencias':
-      data = getAsistenciasPF();
+      result = getAsistenciasPF();
       break;
     case 'asistencias_profes':
-      data = getAsistenciasProfesores();
+      result = getAsistenciasProfesores();
       break;
     case 'maestro_grupos':
-      data = getMaestroGrupos();
+      result = getMaestroGrupos();
       break;
     case 'estudiantes':
-      data = getEstudiantes();
+      result = getEstudiantes();
       break;
     case 'revisiones':
-      data = getRevisiones();
+      result = getRevisiones();
       break;
     case 'reposiciones':
-      data = getReposiciones();
+      result = getReposiciones();
       break;
     default:
-      data = { error: 'Parámetro sheet no válido' };
+      result = { error: 'Parámetro sheet no válido' };
   }
 
+  // Si hay error, retornarlo directamente
+  if (result && result.error) {
+    return ContentService
+      .createTextOutput(JSON.stringify(result))
+      .setMimeType(ContentService.MimeType.JSON);
+  }
+
+  // Envolver el resultado en la estructura esperada por el frontend
+  const response = {
+    data: result,
+    count: Array.isArray(result) ? result.length : 0
+  };
+
   return ContentService
-    .createTextOutput(JSON.stringify(data))
+    .createTextOutput(JSON.stringify(response))
     .setMimeType(ContentService.MimeType.JSON);
 }
 
