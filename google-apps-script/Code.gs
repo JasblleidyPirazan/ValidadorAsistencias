@@ -14,10 +14,10 @@
  */
 
 // =====================================================
-// CONFIGURACIÓN DE HOJAS DE CÁLCULO - SEMESTRE 2026-1
+// VALIDADOR_CONFIGURACIÓN DE HOJAS DE CÁLCULO - SEMESTRE 2026-1
 // =====================================================
 
-const CONFIG = {
+const VALIDADOR_CONFIG = {
   // Hoja principal del sistema (Matrícula, Grupos, Reposiciones, Reporte_Consolidado)
   SISTEMA: '1qEM6-CFjC6I1eVdy6yVCN_mBYX06SDojXkMJ7R20LWU',
 
@@ -121,11 +121,11 @@ function doPost(e) {
  * Mapea los nombres de columnas al formato esperado por el frontend
  */
 function getAsistenciasPF() {
-  const ss = SpreadsheetApp.openById(CONFIG.SISTEMA);
-  const sheet = ss.getSheetByName(CONFIG.SHEETS.REPORTE_CONSOLIDADO);
+  const ss = SpreadsheetApp.openById(VALIDADOR_CONFIG.SISTEMA);
+  const sheet = ss.getSheetByName(VALIDADOR_CONFIG.SHEETS.REPORTE_CONSOLIDADO);
 
   if (!sheet) {
-    return { error: 'No se encontró la hoja ' + CONFIG.SHEETS.REPORTE_CONSOLIDADO };
+    return { error: 'No se encontró la hoja ' + VALIDADOR_CONFIG.SHEETS.REPORTE_CONSOLIDADO };
   }
 
   const data = sheet.getDataRange().getValues();
@@ -179,11 +179,11 @@ function getAsistenciasPF() {
  * Obtiene las asistencias de todos los profesores desde la hoja consolidada AsistenciaProfes
  */
 function getAsistenciasProfesores() {
-  const ss = SpreadsheetApp.openById(CONFIG.SISTEMA);
-  const sheet = ss.getSheetByName(CONFIG.SHEETS.ASISTENCIA_PROFES);
+  const ss = SpreadsheetApp.openById(VALIDADOR_CONFIG.SISTEMA);
+  const sheet = ss.getSheetByName(VALIDADOR_CONFIG.SHEETS.ASISTENCIA_PROFES);
 
   if (!sheet) {
-    return { error: 'No se encontró la hoja ' + CONFIG.SHEETS.ASISTENCIA_PROFES };
+    return { error: 'No se encontró la hoja ' + VALIDADOR_CONFIG.SHEETS.ASISTENCIA_PROFES };
   }
 
   const data = sheet.getDataRange().getValues();
@@ -223,11 +223,11 @@ function getAsistenciasProfesores() {
  * Obtiene el maestro de grupos
  */
 function getMaestroGrupos() {
-  const ss = SpreadsheetApp.openById(CONFIG.SISTEMA);
-  const sheet = ss.getSheetByName(CONFIG.SHEETS.GRUPOS);
+  const ss = SpreadsheetApp.openById(VALIDADOR_CONFIG.SISTEMA);
+  const sheet = ss.getSheetByName(VALIDADOR_CONFIG.SHEETS.GRUPOS);
 
   if (!sheet) {
-    return { error: 'No se encontró la hoja ' + CONFIG.SHEETS.GRUPOS };
+    return { error: 'No se encontró la hoja ' + VALIDADOR_CONFIG.SHEETS.GRUPOS };
   }
 
   const data = sheet.getDataRange().getValues();
@@ -253,11 +253,11 @@ function getMaestroGrupos() {
  * Mapea los nombres de columnas al formato esperado por el frontend
  */
 function getEstudiantes() {
-  const ss = SpreadsheetApp.openById(CONFIG.SISTEMA);
-  const sheet = ss.getSheetByName(CONFIG.SHEETS.MATRICULA);
+  const ss = SpreadsheetApp.openById(VALIDADOR_CONFIG.SISTEMA);
+  const sheet = ss.getSheetByName(VALIDADOR_CONFIG.SHEETS.MATRICULA);
 
   if (!sheet) {
-    return { error: 'No se encontró la hoja ' + CONFIG.SHEETS.MATRICULA };
+    return { error: 'No se encontró la hoja ' + VALIDADOR_CONFIG.SHEETS.MATRICULA };
   }
 
   const data = sheet.getDataRange().getValues();
@@ -284,11 +284,11 @@ function getEstudiantes() {
  * Obtiene las reposiciones
  */
 function getReposiciones() {
-  const ss = SpreadsheetApp.openById(CONFIG.SISTEMA);
-  const sheet = ss.getSheetByName(CONFIG.SHEETS.REPOSICIONES);
+  const ss = SpreadsheetApp.openById(VALIDADOR_CONFIG.SISTEMA);
+  const sheet = ss.getSheetByName(VALIDADOR_CONFIG.SHEETS.REPOSICIONES);
 
   if (!sheet) {
-    return { error: 'No se encontró la hoja ' + CONFIG.SHEETS.REPOSICIONES };
+    return { error: 'No se encontró la hoja ' + VALIDADOR_CONFIG.SHEETS.REPOSICIONES };
   }
 
   const data = sheet.getDataRange().getValues();
@@ -317,12 +317,12 @@ function getReposiciones() {
  * Obtiene las revisiones guardadas
  */
 function getRevisiones() {
-  const ss = SpreadsheetApp.openById(CONFIG.SISTEMA);
-  let sheet = ss.getSheetByName(CONFIG.SHEETS.REVISIONES);
+  const ss = SpreadsheetApp.openById(VALIDADOR_CONFIG.SISTEMA);
+  let sheet = ss.getSheetByName(VALIDADOR_CONFIG.SHEETS.REVISIONES);
 
   // Si no existe la hoja de revisiones, crearla
   if (!sheet) {
-    sheet = ss.insertSheet(CONFIG.SHEETS.REVISIONES);
+    sheet = ss.insertSheet(VALIDADOR_CONFIG.SHEETS.REVISIONES);
     sheet.appendRow(['FECHA', 'GRUPO', 'ESTADO', 'NOTAS', 'TIMESTAMP', 'USUARIO']);
   }
 
@@ -357,12 +357,12 @@ function getRevisiones() {
  * Guarda una revisión de clase
  */
 function guardarRevision(data) {
-  const ss = SpreadsheetApp.openById(CONFIG.SISTEMA);
-  let sheet = ss.getSheetByName(CONFIG.SHEETS.REVISIONES);
+  const ss = SpreadsheetApp.openById(VALIDADOR_CONFIG.SISTEMA);
+  let sheet = ss.getSheetByName(VALIDADOR_CONFIG.SHEETS.REVISIONES);
 
   // Si no existe la hoja de revisiones, crearla
   if (!sheet) {
-    sheet = ss.insertSheet(CONFIG.SHEETS.REVISIONES);
+    sheet = ss.insertSheet(VALIDADOR_CONFIG.SHEETS.REVISIONES);
     sheet.appendRow(['FECHA', 'GRUPO', 'ESTADO', 'NOTAS', 'TIMESTAMP', 'USUARIO']);
   }
 
@@ -440,7 +440,7 @@ function testConnection() {
 
   // Probar hoja del sistema
   try {
-    const ss = SpreadsheetApp.openById(CONFIG.SISTEMA);
+    const ss = SpreadsheetApp.openById(VALIDADOR_CONFIG.SISTEMA);
     tests.sistema = true;
     tests.sistemaSheets = ss.getSheets().map(s => s.getName());
   } catch (e) {
@@ -448,7 +448,7 @@ function testConnection() {
   }
 
   // Probar hojas de profesores
-  for (const [profesor, sheetId] of Object.entries(CONFIG.PROFESORES)) {
+  for (const [profesor, sheetId] of Object.entries(VALIDADOR_CONFIG.PROFESORES)) {
     try {
       const ss = SpreadsheetApp.openById(sheetId);
       tests.profesores[profesor] = {
@@ -475,8 +475,8 @@ function getInfo() {
     version: '1.0.0',
     lastUpdate: new Date().toISOString(),
     sheets: {
-      sistema: CONFIG.SISTEMA,
-      profesores: CONFIG.PROFESORES
+      sistema: VALIDADOR_CONFIG.SISTEMA,
+      profesores: VALIDADOR_CONFIG.PROFESORES
     }
   };
 }
