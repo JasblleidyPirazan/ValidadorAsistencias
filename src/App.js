@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { Calendar, CheckCircle, AlertTriangle, Clock, X } from 'lucide-react';
 
 // Configuración de la API - Semestre 2026-1
-const API_BASE_URL = 'https://script.google.com/macros/s/AKfycbw5fL3Gfn-sAZiXGZtS0zv61J1X79LjPIubPktl47d3wxQ3QG3DU5Z4UC9nyQCB2Gp5FQ/exec';
+const API_BASE_URL = 'https://script.google.com/macros/s/AKfycbwDvcrx80IfkYQFHQBrgCXwcwyqWcWN-SkERXOaHY3Uz4gAKAP2penBnk_oBkcXailEzQ/exec';
 
 const API_CONFIG = {
   ASISTENCIAS_PF: `${API_BASE_URL}?sheet=asistencias`,
