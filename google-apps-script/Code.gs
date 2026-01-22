@@ -36,6 +36,7 @@ const CONFIG = {
     GRUPOS: 'Grupos',
     REPOSICIONES: 'Reposiciones',
     REPORTE_CONSOLIDADO: 'Reporte_Consolidado',
+    ASISTENCIA_PROFES: 'AsistenciaProfes',
     REVISIONES: 'Revisiones'  // Pestaña para guardar revisiones
   }
 };
@@ -117,6 +118,7 @@ function doPost(e) {
 
 /**
  * Obtiene las asistencias del Reporte Consolidado (PF)
+ * Mapea los nombres de columnas al formato esperado por el frontend
  */
 function getAsistenciasPF() {
   const ss = SpreadsheetApp.openById(CONFIG.SISTEMA);
@@ -129,19 +131,43 @@ function getAsistenciasPF() {
   const data = sheet.getDataRange().getValues();
   const headers = data[0];
 
+  // Mapeo de columnas: nombre en hoja -> nombre esperado por frontend
+  const columnMapping = {
+    'FECHA': 'Fecha',
+    'COD_GRUPO': 'Grupo_Codigo',
+    'COD_ESTUDIANTE': 'Estudiante_ID',
+    'NOMBRE': 'Nombre',
+    'ESTADO_ASISTENCIA': 'Estado',
+    'TIPO': 'Tipo_Clase'
+  };
+
   const result = [];
   for (let i = 1; i < data.length; i++) {
-    const row = {};
+    const row = {
+      Enviado_Por: 'usuario'  // Marcar como datos del PF
+    };
+
     for (let j = 0; j < headers.length; j++) {
       let value = data[i][j];
-      // Formatear fechas
+      const headerName = headers[j];
+
+      // Formatear fechas al formato yyyy-MM-dd para consistencia
       if (value instanceof Date) {
-        value = Utilities.formatDate(value, Session.getScriptTimeZone(), 'dd/MM/yyyy');
+        value = Utilities.formatDate(value, Session.getScriptTimeZone(), 'yyyy-MM-dd');
       }
-      row[headers[j]] = value;
+
+      // Usar nombre mapeado si existe, sino usar nombre original
+      const mappedName = columnMapping[headerName] || headerName;
+      row[mappedName] = value;
     }
+
+    // Convertir estado P/A al formato completo
+    if (row['Estado'] === 'P') row['Estado'] = 'Presente';
+    if (row['Estado'] === 'A') row['Estado'] = 'Ausente';
+    if (row['Estado'] === 'J') row['Estado'] = 'Justificado';
+
     // Solo agregar filas con datos válidos
-    if (row['FECHA'] && row['COD_GRUPO']) {
+    if (row['Fecha'] && row['Grupo_Codigo']) {
       result.push(row);
     }
   }
@@ -150,46 +176,47 @@ function getAsistenciasPF() {
 }
 
 /**
- * Obtiene las asistencias de todos los profesores
+ * Obtiene las asistencias de todos los profesores desde la hoja consolidada AsistenciaProfes
  */
 function getAsistenciasProfesores() {
-  const todasAsistencias = [];
+  const ss = SpreadsheetApp.openById(CONFIG.SISTEMA);
+  const sheet = ss.getSheetByName(CONFIG.SHEETS.ASISTENCIA_PROFES);
 
-  for (const [profesor, sheetId] of Object.entries(CONFIG.PROFESORES)) {
-    try {
-      const ss = SpreadsheetApp.openById(sheetId);
-      // Intentar obtener la primera hoja o una hoja específica
-      const sheet = ss.getSheets()[0]; // Primera hoja por defecto
+  if (!sheet) {
+    return { error: 'No se encontró la hoja ' + CONFIG.SHEETS.ASISTENCIA_PROFES };
+  }
 
-      if (!sheet) continue;
+  const data = sheet.getDataRange().getValues();
+  if (data.length < 2) return []; // Solo encabezados o vacía
 
-      const data = sheet.getDataRange().getValues();
-      if (data.length < 2) continue; // Sin datos
+  const headers = data[0];
 
-      const headers = data[0];
+  const result = [];
+  for (let i = 1; i < data.length; i++) {
+    const row = {};
 
-      for (let i = 1; i < data.length; i++) {
-        const row = {};
-        for (let j = 0; j < headers.length; j++) {
-          let value = data[i][j];
-          if (value instanceof Date) {
-            value = Utilities.formatDate(value, Session.getScriptTimeZone(), 'dd/MM/yyyy');
-          }
-          row[headers[j]] = value;
-        }
-        row['PROFESOR_ORIGEN'] = profesor;
+    for (let j = 0; j < headers.length; j++) {
+      let value = data[i][j];
+      const headerName = headers[j];
 
-        // Solo agregar filas con datos válidos
-        if (row['FECHA'] || row['Fecha']) {
-          todasAsistencias.push(row);
-        }
+      // Formatear fechas al formato yyyy-MM-dd para consistencia
+      if (value instanceof Date) {
+        value = Utilities.formatDate(value, Session.getScriptTimeZone(), 'yyyy-MM-dd');
       }
-    } catch (e) {
-      console.log('Error leyendo hoja de ' + profesor + ': ' + e.message);
+
+      row[headerName] = value;
+    }
+
+    // Marcar como datos del profesor
+    row['Enviado_Por'] = row['Enviado_Por'] || 'profesor';
+
+    // Solo agregar filas con datos válidos (no duplicados y con fecha)
+    if (row['Fecha'] && row['Grupo_Codigo'] && row['Es_Duplicado'] !== true && row['Es_Duplicado'] !== 'TRUE') {
+      result.push(row);
     }
   }
 
-  return todasAsistencias;
+  return result;
 }
 
 /**
@@ -223,6 +250,7 @@ function getMaestroGrupos() {
 
 /**
  * Obtiene la lista de estudiantes (matrícula)
+ * Mapea los nombres de columnas al formato esperado por el frontend
  */
 function getEstudiantes() {
   const ss = SpreadsheetApp.openById(CONFIG.SISTEMA);
@@ -237,17 +265,15 @@ function getEstudiantes() {
 
   const result = [];
   for (let i = 1; i < data.length; i++) {
-    const row = {};
-    for (let j = 0; j < headers.length; j++) {
-      let value = data[i][j];
-      if (value instanceof Date) {
-        value = Utilities.formatDate(value, Session.getScriptTimeZone(), 'dd/MM/yyyy');
-      }
-      row[headers[j]] = value;
-    }
-    // Solo agregar filas con código de estudiante
-    if (row['COD ESTUDIANTE'] || row['COD_ESTUDIANTE']) {
-      result.push(row);
+    const codEstudiante = data[i][0]; // Primera columna: COD ESTUDIANTE
+    const nombreEstudiante = data[i][1]; // Segunda columna: ESTUDIANTE
+
+    // Solo agregar filas con código de estudiante válido
+    if (codEstudiante && codEstudiante !== '' && codEstudiante !== '#N/A') {
+      result.push({
+        ID: codEstudiante,
+        Nombre: nombreEstudiante
+      });
     }
   }
 
