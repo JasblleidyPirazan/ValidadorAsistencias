@@ -1,7 +1,9 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { Calendar, CheckCircle, AlertTriangle, Clock, X } from 'lucide-react';
 
-// Configuración de la API
+// Configuración de la API - Semestre 2026-1
+// IMPORTANTE: Después de desplegar el nuevo Google Apps Script, reemplaza esta URL
+// Ver instrucciones en: /google-apps-script/README.md
 const API_BASE_URL = 'https://script.google.com/macros/s/AKfycbxfPWuRZcGqv0mn3UqX-vvo1xyeB2BEqi8mVMX5bepwtvuW5hZFlYzUiiNohont8qfd/exec';
 
 const API_CONFIG = {
