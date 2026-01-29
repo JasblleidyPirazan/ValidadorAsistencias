@@ -37,9 +37,17 @@ const App = () => {
   const loadData = useCallback(async () => {
     setLoading(true);
     try {
-      console.log('Cargando datos de todas las fechas...');
-      
+      console.log('%c🚀 INICIANDO CARGA DE DATOS', 'background: #222; color: #bada55; font-size: 16px; font-weight: bold;');
+      console.log('URLs de API:', {
+        PF: API_CONFIG.ASISTENCIAS_PF,
+        PROFES: API_CONFIG.ASISTENCIAS_PROFES,
+        MAESTRO: API_CONFIG.MAESTRO_GRUPOS,
+        ESTUDIANTES: API_CONFIG.ESTUDIANTES,
+        REVISIONES: API_CONFIG.REVISIONES_GET
+      });
+
       // Hacer peticiones en paralelo (ahora incluye revisiones)
+      console.log('⏳ Haciendo peticiones en paralelo...');
       const [resPF, resProfes, resMaestro, resEstudiantes, resRevisiones] = await Promise.all([
         fetch(API_CONFIG.ASISTENCIAS_PF),
         fetch(API_CONFIG.ASISTENCIAS_PROFES),
@@ -48,8 +56,28 @@ const App = () => {
         fetch(API_CONFIG.REVISIONES_GET)
       ]);
 
+      console.log('📡 Status de respuestas HTTP:', {
+        PF: resProfes.status,
+        PROFES: resProfes.status,
+        MAESTRO: resMaestro.status,
+        ESTUDIANTES: resEstudiantes.status,
+        REVISIONES: resRevisiones.status
+      });
+
+      console.log('🔄 Parseando respuestas JSON...');
       const dataPF = await resPF.json();
+      console.log('✅ PF parseado:', dataPF);
+
       const dataProfes = await resProfes.json();
+      console.log('%c⚠️ PROFESORES PARSEADO:', 'background: yellow; color: black; font-size: 14px; font-weight: bold;', dataProfes);
+      console.log('Estructura dataProfes:', {
+        tieneData: !!dataProfes.data,
+        esArray: Array.isArray(dataProfes.data),
+        longitud: dataProfes.data?.length,
+        count: dataProfes.count,
+        keys: Object.keys(dataProfes)
+      });
+
       const dataMaestro = await resMaestro.json();
       const dataEstudiantes = await resEstudiantes.json();
       const dataRevisiones = await resRevisiones.json();
