@@ -380,18 +380,21 @@ const App = () => {
 
   // Filtrar clases según filtros activos
   const filtrarClases = (clases) => {
-    return Object.keys(clases).filter(key => {
+    let filtradoPorRevisadas = 0;
+
+    const resultado = Object.keys(clases).filter(key => {
       const clase = clases[key];
-      
+
       // NUEVO: Filtrar clases ya revisadas en la vista de pendientes
       if (currentPage === 'pendientes' && claseYaRevisada(clase.fecha, clase.grupo)) {
+        filtradoPorRevisadas++;
         return false;
       }
-      
+
       if (filters.profesor && clase.profesor !== filters.profesor) return false;
       if (filters.grupo && clase.grupo !== filters.grupo) return false;
       if (filters.cancha && clase.cancha !== filters.cancha) return false;
-      
+
       if (filters.soloInconsistencias) {
         const tieneInconsistencia = Object.values(clase.estudiantes).some(est => {
           const inc = detectarInconsistencia(est);
@@ -402,6 +405,12 @@ const App = () => {
 
       return true;
     });
+
+    if (filtradoPorRevisadas > 0) {
+      console.log(`⚠️ ${filtradoPorRevisadas} clases filtradas por ya estar revisadas`);
+    }
+
+    return resultado;
   };
 
   // Agrupar clases por horario
