@@ -75,11 +75,11 @@ const App = () => {
       }
 
       console.log('Datos recibidos:', {
-        asistenciasPF: dataPF.count,
-        asistenciasProfes: dataProfes.count,
-        maestroGrupos: dataMaestro.count,
-        estudiantes: dataEstudiantes?.count || 0,
-        revisiones: dataRevisiones?.count || 0
+        asistenciasPF: dataPF.data?.length || 0,
+        asistenciasProfes: dataProfes.data?.length || 0,
+        maestroGrupos: dataMaestro.data?.length || 0,
+        estudiantes: dataEstudiantes?.data?.length || 0,
+        revisiones: dataRevisiones?.data?.length || 0
       });
 
       // Crear mapa de estudiantes ID -> Nombre (con validación)
@@ -101,6 +101,14 @@ const App = () => {
         asistenciasPF: dataPF.data.length,
         asistenciasProfes: dataProfes.data.length
       });
+
+      // Logs de depuración
+      if (dataPF.data.length > 0) {
+        console.log('Ejemplo asistencia PF:', dataPF.data[0]);
+      }
+      if (dataProfes.data.length > 0) {
+        console.log('Ejemplo asistencia Profesor:', dataProfes.data[0]);
+      }
 
       setAsistenciasPF(dataPF.data);
       setAsistenciasProfes(dataProfes.data);
@@ -178,8 +186,8 @@ const App = () => {
       ? asistenciasProfes
       : asistenciasProfes.filter(a => a.Fecha === selectedDate);
 
-    // Agrupar por Fecha + Grupo_Codigo
-    [...asistenciasPFFiltered, ...asistenciasProfesFiltered].forEach(asistencia => {
+    // Procesar asistencias de PF
+    asistenciasPFFiltered.forEach(asistencia => {
       const key = `${asistencia.Fecha}_${asistencia.Grupo_Codigo}`;
       if (!clasesTemp[key]) {
         clasesTemp[key] = {
@@ -199,13 +207,46 @@ const App = () => {
         };
       }
 
-      // Determinar si viene del PF o del Profe
-      if (asistencia.Enviado_Por === 'usuario' || asistenciasPF.includes(asistencia)) {
-        clasesTemp[key].estudiantes[estudianteKey].pf = asistencia;
-      } else {
-        clasesTemp[key].estudiantes[estudianteKey].profe = asistencia;
-      }
+      clasesTemp[key].estudiantes[estudianteKey].pf = asistencia;
     });
+
+    // Procesar asistencias de Profesores
+    asistenciasProfesFiltered.forEach(asistencia => {
+      const key = `${asistencia.Fecha}_${asistencia.Grupo_Codigo}`;
+      if (!clasesTemp[key]) {
+        clasesTemp[key] = {
+          fecha: asistencia.Fecha,
+          grupo: asistencia.Grupo_Codigo,
+          estudiantes: {}
+        };
+      }
+
+      const estudianteKey = asistencia.Estudiante_ID;
+      if (!clasesTemp[key].estudiantes[estudianteKey]) {
+        clasesTemp[key].estudiantes[estudianteKey] = {
+          id: estudianteKey,
+          nombre: estudiantes[estudianteKey] || estudianteKey,
+          pf: null,
+          profe: null
+        };
+      }
+
+      clasesTemp[key].estudiantes[estudianteKey].profe = asistencia;
+    });
+
+    // Log de depuración
+    console.log('Clases procesadas (antes de filtrar por día):', Object.keys(clasesTemp).length);
+    if (Object.keys(clasesTemp).length > 0) {
+      const primeraClaveClase = Object.keys(clasesTemp)[0];
+      const primeraClase = clasesTemp[primeraClaveClase];
+      console.log('Ejemplo de clase procesada:', {
+        key: primeraClaveClase,
+        fecha: primeraClase.fecha,
+        grupo: primeraClase.grupo,
+        cantidadEstudiantes: Object.keys(primeraClase.estudiantes).length,
+        ejemploEstudiante: Object.values(primeraClase.estudiantes)[0]
+      });
+    }
 
     // Agregar información del maestro de grupos y filtrar por día de la semana
     const clasesDelDia = {};
