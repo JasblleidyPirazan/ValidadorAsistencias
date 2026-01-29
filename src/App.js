@@ -113,10 +113,22 @@ const App = () => {
       setAsistenciasPF(dataPF.data);
       setAsistenciasProfes(dataProfes.data);
       setMaestroGrupos(dataMaestro.data);
-      
+
       // Cargar todas las revisiones (no solo de la fecha seleccionada)
       setRevisiones(dataRevisiones?.data || []);
-      
+
+      // Resumen de diagnóstico completo
+      console.log('%c========================================', 'color: blue; font-weight: bold');
+      console.log('%c✅ DATOS CARGADOS EXITOSAMENTE', 'color: green; font-weight: bold; font-size: 14px');
+      console.log('%c========================================', 'color: blue; font-weight: bold');
+      console.log('📊 Resumen de datos:');
+      console.log('  - Asistencias PF:', dataPF.data.length);
+      console.log('  - Asistencias Profesores:', dataProfes.data.length);
+      console.log('  - Grupos en maestro:', dataMaestro.data.length);
+      console.log('  - Estudiantes:', Object.keys(estudiantesMap).length);
+      console.log('  - Revisiones:', dataRevisiones?.data?.length || 0);
+      console.log('%c========================================', 'color: blue; font-weight: bold');
+
     } catch (error) {
       console.error('Error cargando datos:', error);
       alert(`Error al cargar datos: ${error.message}\n\nRevisa la consola del navegador (F12) para más detalles.`);
@@ -235,21 +247,30 @@ const App = () => {
     });
 
     // Log de depuración
-    console.log('Clases procesadas (antes de filtrar por día):', Object.keys(clasesTemp).length);
+    console.log('📊 Clases procesadas (antes de filtrar por día):', Object.keys(clasesTemp).length);
     if (Object.keys(clasesTemp).length > 0) {
       const primeraClaveClase = Object.keys(clasesTemp)[0];
       const primeraClase = clasesTemp[primeraClaveClase];
-      console.log('Ejemplo de clase procesada:', {
+      const primerEstudiante = Object.values(primeraClase.estudiantes)[0];
+      console.log('📋 Ejemplo de clase procesada:', {
         key: primeraClaveClase,
         fecha: primeraClase.fecha,
         grupo: primeraClase.grupo,
         cantidadEstudiantes: Object.keys(primeraClase.estudiantes).length,
-        ejemploEstudiante: Object.values(primeraClase.estudiantes)[0]
+        ejemploEstudiante: {
+          id: primerEstudiante.id,
+          nombre: primerEstudiante.nombre,
+          tienePF: !!primerEstudiante.pf,
+          tieneProfe: !!primerEstudiante.profe,
+          estadoPF: primerEstudiante.pf?.Estado || 'N/A',
+          estadoProfe: primerEstudiante.profe?.Estado || 'N/A'
+        }
       });
     }
 
     // Agregar información del maestro de grupos y filtrar por día de la semana
     const clasesDelDia = {};
+    let clasesExcluidas = 0;
 
     Object.keys(clasesTemp).forEach(key => {
       const clase = clasesTemp[key];
@@ -270,7 +291,15 @@ const App = () => {
       // Solo incluir si el grupo tiene clase ese día de la semana
       if (clase.tieneClaseHoy) {
         clasesDelDia[key] = clase;
+      } else {
+        clasesExcluidas++;
       }
+    });
+
+    console.log('🗓️ Filtrado por día de la semana:', {
+      clasesAntes: Object.keys(clasesTemp).length,
+      clasesIncluidas: Object.keys(clasesDelDia).length,
+      clasesExcluidas: clasesExcluidas
     });
 
     return clasesDelDia;
@@ -555,6 +584,20 @@ const App = () => {
 
   const clasesKeys = filtrarClases(clases);
   const clasesPorHorario = agruparPorHorario(clases, clasesKeys);
+
+  // Log de depuración de filtrado final
+  console.log('🔍 Resultado del filtrado:', {
+    totalClasesDisponibles: Object.keys(clases).length,
+    clasesFiltradas: clasesKeys.length,
+    filtrosActivos: {
+      profesor: filters.profesor || 'ninguno',
+      grupo: filters.grupo || 'ninguno',
+      cancha: filters.cancha || 'ninguno',
+      soloInconsistencias: filters.soloInconsistencias,
+      todasLasFechas: filters.todasLasFechas
+    },
+    horariosConClases: Object.keys(clasesPorHorario).length
+  });
 
   // Obtener listas únicas para filtros
   const profesores = [...new Set(maestroGrupos.map(g => g.Profe).filter(Boolean))];
