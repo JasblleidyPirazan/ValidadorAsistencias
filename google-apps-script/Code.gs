@@ -315,6 +315,7 @@ function getReposiciones() {
 
 /**
  * Obtiene las revisiones guardadas
+ * Mapea los campos al formato esperado por el frontend
  */
 function getRevisiones() {
   const ss = SpreadsheetApp.openById(VALIDADOR_CONFIG.SISTEMA);
@@ -323,7 +324,7 @@ function getRevisiones() {
   // Si no existe la hoja de revisiones, crearla
   if (!sheet) {
     sheet = ss.insertSheet(VALIDADOR_CONFIG.SHEETS.REVISIONES);
-    sheet.appendRow(['FECHA', 'GRUPO', 'ESTADO', 'NOTAS', 'TIMESTAMP', 'USUARIO']);
+    sheet.appendRow(['FECHA', 'GRUPO', 'ESTADO', 'NOTAS', 'TIMESTAMP', 'USUARIO', 'PROFESOR']);
   }
 
   const data = sheet.getDataRange().getValues();
@@ -331,17 +332,46 @@ function getRevisiones() {
 
   const headers = data[0];
 
+  // Mapeo de columnas: nombre en hoja -> nombre esperado por frontend
+  const columnMapping = {
+    'FECHA': 'Fecha',
+    'GRUPO': 'Grupo_Codigo',
+    'ESTADO': 'Estado_Revision',
+    'NOTAS': 'Notas',
+    'TIMESTAMP': 'Timestamp',
+    'USUARIO': 'Revisado_Por',
+    'PROFESOR': 'profesor'
+  };
+
   const result = [];
   for (let i = 1; i < data.length; i++) {
     const row = {};
     for (let j = 0; j < headers.length; j++) {
       let value = data[i][j];
+      const headerName = headers[j];
+
+      // Formatear fechas al formato yyyy-MM-dd para consistencia con el frontend
       if (value instanceof Date) {
-        value = Utilities.formatDate(value, Session.getScriptTimeZone(), 'dd/MM/yyyy HH:mm:ss');
+        if (headerName === 'FECHA') {
+          // Fecha principal: formato yyyy-MM-dd para comparar con asistencias
+          value = Utilities.formatDate(value, Session.getScriptTimeZone(), 'yyyy-MM-dd');
+        } else {
+          // Timestamp: formato ISO completo
+          value = Utilities.formatDate(value, Session.getScriptTimeZone(), "yyyy-MM-dd'T'HH:mm:ss");
+        }
       }
-      row[headers[j]] = value;
+
+      // Usar nombre mapeado si existe, sino usar nombre original
+      const mappedName = columnMapping[headerName] || headerName;
+      row[mappedName] = value;
     }
-    if (row['FECHA'] && row['GRUPO']) {
+
+    // Generar ID único si no existe
+    if (!row['ID_Revision']) {
+      row['ID_Revision'] = 'REV_' + i;
+    }
+
+    if (row['Fecha'] && row['Grupo_Codigo']) {
       result.push(row);
     }
   }
@@ -355,6 +385,7 @@ function getRevisiones() {
 
 /**
  * Guarda una revisión de clase
+ * Acepta campos del frontend: Fecha, Grupo_Codigo, Estado_Revision, Notas, profesor
  */
 function guardarRevision(data) {
   const ss = SpreadsheetApp.openById(VALIDADOR_CONFIG.SISTEMA);
@@ -363,26 +394,35 @@ function guardarRevision(data) {
   // Si no existe la hoja de revisiones, crearla
   if (!sheet) {
     sheet = ss.insertSheet(VALIDADOR_CONFIG.SHEETS.REVISIONES);
-    sheet.appendRow(['FECHA', 'GRUPO', 'ESTADO', 'NOTAS', 'TIMESTAMP', 'USUARIO']);
+    sheet.appendRow(['FECHA', 'GRUPO', 'ESTADO', 'NOTAS', 'TIMESTAMP', 'USUARIO', 'PROFESOR']);
   }
 
   const timestamp = new Date();
-  const usuario = Session.getActiveUser().getEmail() || 'Sistema';
+  const usuario = Session.getActiveUser().getEmail() || data.Revisado_Por || 'Sistema';
+
+  // Mapear campos del frontend a los nombres esperados
+  // El frontend envía: Fecha, Grupo_Codigo, Estado_Revision, Notas, profesor
+  const fecha = data.Fecha || data.fecha;
+  const grupo = data.Grupo_Codigo || data.grupo;
+  const estado = data.Estado_Revision || data.estado;
+  const notas = data.Notas || data.notas || '';
+  const profesor = data.profesor || '';
 
   // Verificar si ya existe una revisión para esta fecha y grupo
   const existingData = sheet.getDataRange().getValues();
   let rowToUpdate = -1;
 
   for (let i = 1; i < existingData.length; i++) {
-    const fecha = existingData[i][0];
-    const grupo = existingData[i][1];
+    const fechaExistente = existingData[i][0];
+    const grupoExistente = existingData[i][1];
 
-    let fechaStr = fecha;
-    if (fecha instanceof Date) {
-      fechaStr = Utilities.formatDate(fecha, Session.getScriptTimeZone(), 'dd/MM/yyyy');
+    let fechaStr = fechaExistente;
+    if (fechaExistente instanceof Date) {
+      // Formatear en yyyy-MM-dd para comparar con el formato del frontend
+      fechaStr = Utilities.formatDate(fechaExistente, Session.getScriptTimeZone(), 'yyyy-MM-dd');
     }
 
-    if (fechaStr === data.fecha && grupo === data.grupo) {
+    if (fechaStr === fecha && grupoExistente === grupo) {
       rowToUpdate = i + 1; // +1 porque getRange usa índice 1-based
       break;
     }
@@ -390,24 +430,26 @@ function guardarRevision(data) {
 
   if (rowToUpdate > 0) {
     // Actualizar fila existente
-    sheet.getRange(rowToUpdate, 1, 1, 6).setValues([[
-      data.fecha,
-      data.grupo,
-      data.estado,
-      data.notas || '',
+    sheet.getRange(rowToUpdate, 1, 1, 7).setValues([[
+      fecha,
+      grupo,
+      estado,
+      notas,
       timestamp,
-      usuario
+      usuario,
+      profesor
     ]]);
     return { success: true, message: 'Revisión actualizada', action: 'updated' };
   } else {
     // Agregar nueva fila
     sheet.appendRow([
-      data.fecha,
-      data.grupo,
-      data.estado,
-      data.notas || '',
+      fecha,
+      grupo,
+      estado,
+      notas,
       timestamp,
-      usuario
+      usuario,
+      profesor
     ]);
     return { success: true, message: 'Revisión guardada', action: 'created' };
   }
