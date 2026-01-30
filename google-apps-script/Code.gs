@@ -316,15 +316,17 @@ function getReposiciones() {
 /**
  * Obtiene las revisiones guardadas
  * Mapea los campos al formato esperado por el frontend
+ *
+ * Columnas de la hoja: Fecha, Grupo_Codigo, Profesor, Estado, Notas, Timestamp, Usuario
  */
 function getRevisiones() {
   const ss = SpreadsheetApp.openById(VALIDADOR_CONFIG.SISTEMA);
   let sheet = ss.getSheetByName(VALIDADOR_CONFIG.SHEETS.REVISIONES);
 
-  // Si no existe la hoja de revisiones, crearla
+  // Si no existe la hoja de revisiones, crearla con los nombres correctos
   if (!sheet) {
     sheet = ss.insertSheet(VALIDADOR_CONFIG.SHEETS.REVISIONES);
-    sheet.appendRow(['FECHA', 'GRUPO', 'ESTADO', 'NOTAS', 'TIMESTAMP', 'USUARIO', 'PROFESOR']);
+    sheet.appendRow(['Fecha', 'Grupo_Codigo', 'Profesor', 'Estado', 'Notas', 'Timestamp', 'Usuario']);
   }
 
   const data = sheet.getDataRange().getValues();
@@ -333,14 +335,15 @@ function getRevisiones() {
   const headers = data[0];
 
   // Mapeo de columnas: nombre en hoja -> nombre esperado por frontend
+  // La hoja usa: Fecha, Grupo_Codigo, Profesor, Estado, Notas, Timestamp, Usuario
   const columnMapping = {
-    'FECHA': 'Fecha',
-    'GRUPO': 'Grupo_Codigo',
-    'ESTADO': 'Estado_Revision',
-    'NOTAS': 'Notas',
-    'TIMESTAMP': 'Timestamp',
-    'USUARIO': 'Revisado_Por',
-    'PROFESOR': 'profesor'
+    'Fecha': 'Fecha',
+    'Grupo_Codigo': 'Grupo_Codigo',
+    'Profesor': 'profesor',
+    'Estado': 'Estado_Revision',
+    'Notas': 'Notas',
+    'Timestamp': 'Timestamp',
+    'Usuario': 'Revisado_Por'
   };
 
   const result = [];
@@ -352,10 +355,10 @@ function getRevisiones() {
 
       // Formatear fechas al formato yyyy-MM-dd para consistencia con el frontend
       if (value instanceof Date) {
-        if (headerName === 'FECHA') {
+        if (headerName === 'Fecha') {
           // Fecha principal: formato yyyy-MM-dd para comparar con asistencias
           value = Utilities.formatDate(value, Session.getScriptTimeZone(), 'yyyy-MM-dd');
-        } else {
+        } else if (headerName === 'Timestamp') {
           // Timestamp: formato ISO completo
           value = Utilities.formatDate(value, Session.getScriptTimeZone(), "yyyy-MM-dd'T'HH:mm:ss");
         }
