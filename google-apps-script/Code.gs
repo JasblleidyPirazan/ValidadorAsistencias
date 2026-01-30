@@ -388,23 +388,25 @@ function getRevisiones() {
 
 /**
  * Guarda una revisión de clase
- * Acepta campos del frontend: Fecha, Grupo_Codigo, Estado_Revision, Notas, profesor
+ * Acepta campos del frontend: ID_Revision, Fecha, Grupo_Codigo, Estado_Revision, Notas, profesor
+ *
+ * Orden de columnas en la hoja: Fecha, Grupo_Codigo, Profesor, Estado, Notas, Timestamp, Usuario
  */
 function guardarRevision(data) {
   const ss = SpreadsheetApp.openById(VALIDADOR_CONFIG.SISTEMA);
   let sheet = ss.getSheetByName(VALIDADOR_CONFIG.SHEETS.REVISIONES);
 
-  // Si no existe la hoja de revisiones, crearla
+  // Si no existe la hoja de revisiones, crearla con el orden correcto
   if (!sheet) {
     sheet = ss.insertSheet(VALIDADOR_CONFIG.SHEETS.REVISIONES);
-    sheet.appendRow(['FECHA', 'GRUPO', 'ESTADO', 'NOTAS', 'TIMESTAMP', 'USUARIO', 'PROFESOR']);
+    sheet.appendRow(['Fecha', 'Grupo_Codigo', 'Profesor', 'Estado', 'Notas', 'Timestamp', 'Usuario']);
   }
 
   const timestamp = new Date();
   const usuario = Session.getActiveUser().getEmail() || data.Revisado_Por || 'Sistema';
 
-  // Mapear campos del frontend a los nombres esperados
-  // El frontend envía: Fecha, Grupo_Codigo, Estado_Revision, Notas, profesor
+  // Mapear campos del frontend
+  // El frontend envía: ID_Revision, Fecha, Grupo_Codigo, Estado_Revision, Notas, profesor
   const fecha = data.Fecha || data.fecha;
   const grupo = data.Grupo_Codigo || data.grupo;
   const estado = data.Estado_Revision || data.estado;
@@ -416,44 +418,38 @@ function guardarRevision(data) {
   let rowToUpdate = -1;
 
   for (let i = 1; i < existingData.length; i++) {
-    const fechaExistente = existingData[i][0];
-    const grupoExistente = existingData[i][1];
+    const fechaExistente = existingData[i][0];  // Columna 1: Fecha
+    const grupoExistente = existingData[i][1];  // Columna 2: Grupo_Codigo
 
     let fechaStr = fechaExistente;
     if (fechaExistente instanceof Date) {
-      // Formatear en yyyy-MM-dd para comparar con el formato del frontend
       fechaStr = Utilities.formatDate(fechaExistente, Session.getScriptTimeZone(), 'yyyy-MM-dd');
     }
 
     if (fechaStr === fecha && grupoExistente === grupo) {
-      rowToUpdate = i + 1; // +1 porque getRange usa índice 1-based
+      rowToUpdate = i + 1;
       break;
     }
   }
 
+  // Orden correcto: Fecha, Grupo_Codigo, Profesor, Estado, Notas, Timestamp, Usuario
+  const rowData = [
+    fecha,      // Col 1: Fecha
+    grupo,      // Col 2: Grupo_Codigo
+    profesor,   // Col 3: Profesor
+    estado,     // Col 4: Estado
+    notas,      // Col 5: Notas
+    timestamp,  // Col 6: Timestamp
+    usuario     // Col 7: Usuario
+  ];
+
   if (rowToUpdate > 0) {
     // Actualizar fila existente
-    sheet.getRange(rowToUpdate, 1, 1, 7).setValues([[
-      fecha,
-      grupo,
-      estado,
-      notas,
-      timestamp,
-      usuario,
-      profesor
-    ]]);
+    sheet.getRange(rowToUpdate, 1, 1, 7).setValues([rowData]);
     return { success: true, message: 'Revisión actualizada', action: 'updated' };
   } else {
     // Agregar nueva fila
-    sheet.appendRow([
-      fecha,
-      grupo,
-      estado,
-      notas,
-      timestamp,
-      usuario,
-      profesor
-    ]);
+    sheet.appendRow(rowData);
     return { success: true, message: 'Revisión guardada', action: 'created' };
   }
 }
