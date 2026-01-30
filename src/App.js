@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { Calendar, CheckCircle, AlertTriangle, Clock, X } from 'lucide-react';
 
 // Configuración de la API
-const API_BASE_URL = 'https://script.google.com/macros/s/AKfycbyqHvNBmBrTCSX_UKnR7LB2zSr7KFU1_003wK3hF13U12NfNB2n4kF_mGphlhagzuDb/exec';
+const API_BASE_URL = 'https://script.google.com/macros/s/AKfycbz4v3kRwM02sCRH_4BYiii6_TVh9IMX0kRaBqfsdeyXYig2O9CbUqKoZsgeNEVZg47z/exec';
 
 const API_CONFIG = {
   ASISTENCIAS_PF: `${API_BASE_URL}?sheet=asistencias`,
@@ -143,6 +143,13 @@ const App = () => {
       setMaestroGrupos(dataMaestro.data);
 
       // Cargar todas las revisiones (no solo de la fecha seleccionada)
+      console.log('%c📋 REVISIONES DEBUG:', 'background: purple; color: white; font-size: 14px;');
+      console.log('Raw dataRevisiones:', dataRevisiones);
+      console.log('dataRevisiones.data:', dataRevisiones?.data);
+      if (dataRevisiones?.data?.length > 0) {
+        console.log('Primera revisión:', dataRevisiones.data[0]);
+        console.log('Campos disponibles:', Object.keys(dataRevisiones.data[0]));
+      }
       setRevisiones(dataRevisiones?.data || []);
 
       // Resumen de diagnóstico completo
@@ -170,10 +177,21 @@ const App = () => {
 
   // Verificar si una clase ya fue revisada
   const claseYaRevisada = (fecha, grupo) => {
-    return revisiones.some(rev => 
+    const encontrada = revisiones.some(rev =>
       rev.Fecha === fecha && rev.Grupo_Codigo === grupo
     );
+    if (encontrada) {
+      console.log(`✅ Clase revisada encontrada: ${fecha} - ${grupo}`);
+    }
+    return encontrada;
   };
+
+  // Log para verificar estado de revisiones
+  console.log('📋 Estado revisiones para filtrado:', {
+    cantidadRevisiones: revisiones.length,
+    primeraRevision: revisiones[0],
+    currentPage
+  });
 
   // Obtener día de la semana en español
   const obtenerDiaSemana = (fecha) => {
@@ -642,7 +660,14 @@ const App = () => {
   const canchas = [...new Set(maestroGrupos.map(g => g.Cancha).filter(Boolean))];
 
   // Filtrar revisiones por fecha seleccionada para el historial
+  console.log('🔍 Filtrando revisiones:', {
+    totalRevisiones: revisiones.length,
+    selectedDate,
+    primeraRevision: revisiones[0],
+    fechasPrimeraRev: revisiones[0]?.Fecha
+  });
   const revisionesFiltradas = revisiones.filter(rev => rev.Fecha === selectedDate);
+  console.log('Revisiones filtradas:', revisionesFiltradas.length);
 
   return (
     <div className="min-h-screen bg-gray-50">
