@@ -315,15 +315,18 @@ function getReposiciones() {
 
 /**
  * Obtiene las revisiones guardadas
+ * Mapea los campos al formato esperado por el frontend
+ *
+ * Columnas de la hoja: Fecha, Grupo_Codigo, Profesor, Estado, Notas, Timestamp, Usuario
  */
 function getRevisiones() {
   const ss = SpreadsheetApp.openById(VALIDADOR_CONFIG.SISTEMA);
   let sheet = ss.getSheetByName(VALIDADOR_CONFIG.SHEETS.REVISIONES);
 
-  // Si no existe la hoja de revisiones, crearla
+  // Si no existe la hoja de revisiones, crearla con los nombres correctos
   if (!sheet) {
     sheet = ss.insertSheet(VALIDADOR_CONFIG.SHEETS.REVISIONES);
-    sheet.appendRow(['FECHA', 'GRUPO', 'ESTADO', 'NOTAS', 'TIMESTAMP', 'USUARIO']);
+    sheet.appendRow(['Fecha', 'Grupo_Codigo', 'Profesor', 'Estado', 'Notas', 'Timestamp', 'Usuario']);
   }
 
   const data = sheet.getDataRange().getValues();
@@ -331,17 +334,47 @@ function getRevisiones() {
 
   const headers = data[0];
 
+  // Mapeo de columnas: nombre en hoja -> nombre esperado por frontend
+  // La hoja usa: Fecha, Grupo_Codigo, Profesor, Estado, Notas, Timestamp, Usuario
+  const columnMapping = {
+    'Fecha': 'Fecha',
+    'Grupo_Codigo': 'Grupo_Codigo',
+    'Profesor': 'profesor',
+    'Estado': 'Estado_Revision',
+    'Notas': 'Notas',
+    'Timestamp': 'Timestamp',
+    'Usuario': 'Revisado_Por'
+  };
+
   const result = [];
   for (let i = 1; i < data.length; i++) {
     const row = {};
     for (let j = 0; j < headers.length; j++) {
       let value = data[i][j];
+      const headerName = headers[j];
+
+      // Formatear fechas al formato yyyy-MM-dd para consistencia con el frontend
       if (value instanceof Date) {
-        value = Utilities.formatDate(value, Session.getScriptTimeZone(), 'dd/MM/yyyy HH:mm:ss');
+        if (headerName === 'Fecha') {
+          // Fecha principal: formato yyyy-MM-dd para comparar con asistencias
+          value = Utilities.formatDate(value, Session.getScriptTimeZone(), 'yyyy-MM-dd');
+        } else if (headerName === 'Timestamp') {
+          // Timestamp: formato ISO completo
+          value = Utilities.formatDate(value, Session.getScriptTimeZone(), "yyyy-MM-dd'T'HH:mm:ss");
+        }
       }
-      row[headers[j]] = value;
+
+      // Usar nombre mapeado si existe, sino usar nombre original
+      const mappedName = columnMapping[headerName] || headerName;
+      row[mappedName] = value;
     }
-    if (row['FECHA'] && row['GRUPO']) {
+
+    // Generar ID único si no existe
+    if (!row['ID_Revision']) {
+      row['ID_Revision'] = 'REV_' + i;
+    }
+
+    if (row['Fecha'] && row['Grupo_Codigo']) {
       result.push(row);
     }
   }
@@ -355,60 +388,68 @@ function getRevisiones() {
 
 /**
  * Guarda una revisión de clase
+ * Acepta campos del frontend: ID_Revision, Fecha, Grupo_Codigo, Estado_Revision, Notas, profesor
+ *
+ * Orden de columnas en la hoja: Fecha, Grupo_Codigo, Profesor, Estado, Notas, Timestamp, Usuario
  */
 function guardarRevision(data) {
   const ss = SpreadsheetApp.openById(VALIDADOR_CONFIG.SISTEMA);
   let sheet = ss.getSheetByName(VALIDADOR_CONFIG.SHEETS.REVISIONES);
 
-  // Si no existe la hoja de revisiones, crearla
+  // Si no existe la hoja de revisiones, crearla con el orden correcto
   if (!sheet) {
     sheet = ss.insertSheet(VALIDADOR_CONFIG.SHEETS.REVISIONES);
-    sheet.appendRow(['FECHA', 'GRUPO', 'ESTADO', 'NOTAS', 'TIMESTAMP', 'USUARIO']);
+    sheet.appendRow(['Fecha', 'Grupo_Codigo', 'Profesor', 'Estado', 'Notas', 'Timestamp', 'Usuario']);
   }
 
   const timestamp = new Date();
-  const usuario = Session.getActiveUser().getEmail() || 'Sistema';
+  const usuario = Session.getActiveUser().getEmail() || data.Revisado_Por || 'Sistema';
+
+  // Mapear campos del frontend
+  // El frontend envía: ID_Revision, Fecha, Grupo_Codigo, Estado_Revision, Notas, profesor
+  const fecha = data.Fecha || data.fecha;
+  const grupo = data.Grupo_Codigo || data.grupo;
+  const estado = data.Estado_Revision || data.estado;
+  const notas = data.Notas || data.notas || '';
+  const profesor = data.profesor || '';
 
   // Verificar si ya existe una revisión para esta fecha y grupo
   const existingData = sheet.getDataRange().getValues();
   let rowToUpdate = -1;
 
   for (let i = 1; i < existingData.length; i++) {
-    const fecha = existingData[i][0];
-    const grupo = existingData[i][1];
+    const fechaExistente = existingData[i][0];  // Columna 1: Fecha
+    const grupoExistente = existingData[i][1];  // Columna 2: Grupo_Codigo
 
-    let fechaStr = fecha;
-    if (fecha instanceof Date) {
-      fechaStr = Utilities.formatDate(fecha, Session.getScriptTimeZone(), 'dd/MM/yyyy');
+    let fechaStr = fechaExistente;
+    if (fechaExistente instanceof Date) {
+      fechaStr = Utilities.formatDate(fechaExistente, Session.getScriptTimeZone(), 'yyyy-MM-dd');
     }
 
-    if (fechaStr === data.fecha && grupo === data.grupo) {
-      rowToUpdate = i + 1; // +1 porque getRange usa índice 1-based
+    if (fechaStr === fecha && grupoExistente === grupo) {
+      rowToUpdate = i + 1;
       break;
     }
   }
 
+  // Orden correcto: Fecha, Grupo_Codigo, Profesor, Estado, Notas, Timestamp, Usuario
+  const rowData = [
+    fecha,      // Col 1: Fecha
+    grupo,      // Col 2: Grupo_Codigo
+    profesor,   // Col 3: Profesor
+    estado,     // Col 4: Estado
+    notas,      // Col 5: Notas
+    timestamp,  // Col 6: Timestamp
+    usuario     // Col 7: Usuario
+  ];
+
   if (rowToUpdate > 0) {
     // Actualizar fila existente
-    sheet.getRange(rowToUpdate, 1, 1, 6).setValues([[
-      data.fecha,
-      data.grupo,
-      data.estado,
-      data.notas || '',
-      timestamp,
-      usuario
-    ]]);
+    sheet.getRange(rowToUpdate, 1, 1, 7).setValues([rowData]);
     return { success: true, message: 'Revisión actualizada', action: 'updated' };
   } else {
     // Agregar nueva fila
-    sheet.appendRow([
-      data.fecha,
-      data.grupo,
-      data.estado,
-      data.notas || '',
-      timestamp,
-      usuario
-    ]);
+    sheet.appendRow(rowData);
     return { success: true, message: 'Revisión guardada', action: 'created' };
   }
 }
