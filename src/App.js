@@ -143,6 +143,13 @@ const App = () => {
       setMaestroGrupos(dataMaestro.data);
 
       // Cargar todas las revisiones (no solo de la fecha seleccionada)
+      console.log('%c📋 REVISIONES DEBUG:', 'background: purple; color: white; font-size: 14px;');
+      console.log('Raw dataRevisiones:', dataRevisiones);
+      console.log('dataRevisiones.data:', dataRevisiones?.data);
+      if (dataRevisiones?.data?.length > 0) {
+        console.log('Primera revisión:', dataRevisiones.data[0]);
+        console.log('Campos disponibles:', Object.keys(dataRevisiones.data[0]));
+      }
       setRevisiones(dataRevisiones?.data || []);
 
       // Resumen de diagnóstico completo
@@ -642,7 +649,14 @@ const App = () => {
   const canchas = [...new Set(maestroGrupos.map(g => g.Cancha).filter(Boolean))];
 
   // Filtrar revisiones por fecha seleccionada para el historial
+  console.log('🔍 Filtrando revisiones:', {
+    totalRevisiones: revisiones.length,
+    selectedDate,
+    primeraRevision: revisiones[0],
+    fechasPrimeraRev: revisiones[0]?.Fecha
+  });
   const revisionesFiltradas = revisiones.filter(rev => rev.Fecha === selectedDate);
+  console.log('Revisiones filtradas:', revisionesFiltradas.length);
 
   return (
     <div className="min-h-screen bg-gray-50">

@@ -334,49 +334,61 @@ function getRevisiones() {
 
   const headers = data[0];
 
-  // Mapeo de columnas: nombre en hoja -> nombre esperado por frontend
-  // La hoja usa: Fecha, Grupo_Codigo, Profesor, Estado, Notas, Timestamp, Usuario
-  const columnMapping = {
-    'Fecha': 'Fecha',
-    'Grupo_Codigo': 'Grupo_Codigo',
-    'Profesor': 'profesor',
-    'Estado': 'Estado_Revision',
-    'Notas': 'Notas',
-    'Timestamp': 'Timestamp',
-    'Usuario': 'Revisado_Por'
-  };
+  // Log para depuración - ver headers reales
+  Logger.log('Headers de Revisiones: ' + JSON.stringify(headers));
 
   const result = [];
   for (let i = 1; i < data.length; i++) {
     const row = {};
-    for (let j = 0; j < headers.length; j++) {
-      let value = data[i][j];
-      const headerName = headers[j];
 
-      // Formatear fechas al formato yyyy-MM-dd para consistencia con el frontend
-      if (value instanceof Date) {
-        if (headerName === 'Fecha') {
-          // Fecha principal: formato yyyy-MM-dd para comparar con asistencias
-          value = Utilities.formatDate(value, Session.getScriptTimeZone(), 'yyyy-MM-dd');
-        } else if (headerName === 'Timestamp') {
-          // Timestamp: formato ISO completo
-          value = Utilities.formatDate(value, Session.getScriptTimeZone(), "yyyy-MM-dd'T'HH:mm:ss");
-        }
+    // Procesar por índice de columna para mayor robustez
+    // Columna 0: Fecha
+    let fecha = data[i][0];
+    if (fecha instanceof Date) {
+      fecha = Utilities.formatDate(fecha, Session.getScriptTimeZone(), 'yyyy-MM-dd');
+    } else if (typeof fecha === 'string' && fecha.includes('/')) {
+      // Convertir formato dd/MM/yyyy a yyyy-MM-dd si es necesario
+      const parts = fecha.split('/');
+      if (parts.length === 3) {
+        fecha = parts[2] + '-' + parts[1].padStart(2, '0') + '-' + parts[0].padStart(2, '0');
       }
-
-      // Usar nombre mapeado si existe, sino usar nombre original
-      const mappedName = columnMapping[headerName] || headerName;
-      row[mappedName] = value;
     }
+    row['Fecha'] = fecha;
 
-    // Generar ID único si no existe
-    if (!row['ID_Revision']) {
-      row['ID_Revision'] = 'REV_' + i;
+    // Columna 1: Grupo_Codigo
+    row['Grupo_Codigo'] = data[i][1];
+
+    // Columna 2: Profesor
+    row['profesor'] = data[i][2];
+
+    // Columna 3: Estado -> Estado_Revision
+    row['Estado_Revision'] = data[i][3];
+
+    // Columna 4: Notas
+    row['Notas'] = data[i][4];
+
+    // Columna 5: Timestamp
+    let timestamp = data[i][5];
+    if (timestamp instanceof Date) {
+      timestamp = Utilities.formatDate(timestamp, Session.getScriptTimeZone(), "yyyy-MM-dd'T'HH:mm:ss");
     }
+    row['Timestamp'] = timestamp;
 
+    // Columna 6: Usuario -> Revisado_Por
+    row['Revisado_Por'] = data[i][6];
+
+    // Generar ID único
+    row['ID_Revision'] = 'REV_' + i;
+
+    // Solo agregar si tiene fecha y grupo válidos
     if (row['Fecha'] && row['Grupo_Codigo']) {
       result.push(row);
     }
+  }
+
+  Logger.log('Revisiones encontradas: ' + result.length);
+  if (result.length > 0) {
+    Logger.log('Primera revisión: ' + JSON.stringify(result[0]));
   }
 
   return result;
