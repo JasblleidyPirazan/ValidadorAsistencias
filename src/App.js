@@ -177,10 +177,21 @@ const App = () => {
 
   // Verificar si una clase ya fue revisada
   const claseYaRevisada = (fecha, grupo) => {
-    return revisiones.some(rev => 
+    const encontrada = revisiones.some(rev =>
       rev.Fecha === fecha && rev.Grupo_Codigo === grupo
     );
+    if (encontrada) {
+      console.log(`✅ Clase revisada encontrada: ${fecha} - ${grupo}`);
+    }
+    return encontrada;
   };
+
+  // Log para verificar estado de revisiones
+  console.log('📋 Estado revisiones para filtrado:', {
+    cantidadRevisiones: revisiones.length,
+    primeraRevision: revisiones[0],
+    currentPage
+  });
 
   // Obtener día de la semana en español
   const obtenerDiaSemana = (fecha) => {
