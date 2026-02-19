@@ -356,8 +356,8 @@ const App = () => {
     const { pf, profe } = estudiante;
 
     // Reposición (solo en PF)
-    if (pf && pf.Tipo_Clase === 'Reposicion') {
-      return { tipo: 'reposicion', color: 'blue', icono: '🔵' };
+    if (pf && pf.Tipo_Clase && (pf.Tipo_Clase === 'Reposicion' || pf.Tipo_Clase === 'Reposición Individual')) {
+      return { tipo: 'reposicion', color: 'blue', icono: '🔵', mensaje: 'Reposición Individual' };
     }
 
     // Falta registro en PF pero profesor sí marcó
@@ -993,7 +993,7 @@ const App = () => {
                           inc.color === 'blue' ? 'bg-blue-100 text-blue-700' :
                           'bg-gray-100 text-gray-700'
                         }`}>
-                          {inc.tipo}
+                          {inc.mensaje || inc.tipo}
                         </span>
                       </div>
                       
